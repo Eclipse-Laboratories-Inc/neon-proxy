@@ -18,5 +18,11 @@ run: build
 run-proxy:
 	./bin/neon-proxy
 
+run-indexer:
+	./bin/neon-indexer
+
+run-mempool:
+	./bin/neon-mempool
+
 # Empty rule for force run some targets always. 
 FORCE:
