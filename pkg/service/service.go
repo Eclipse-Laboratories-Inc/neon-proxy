@@ -123,13 +123,22 @@ func (s *Service) initLoggerManager() {
 		path = "logs"
 	}
 
-	log, err := logger.NewLogger(s.name, logger.LogSettings{
-		Level: strings.ToLower(level),
-		Path:  strings.ToLower(path),
-	})
+	var useFile = strings.ToLower(os.Getenv("NEON_SERVICE_LOG_USE_FILE"))
 
-	if err != nil {
-		panic(err)
+	var log logger.Logger
+	var err error
+	if useFile != "" && (useFile == "true" || useFile == "t") {
+		log, err = logger.NewLogger(s.name, logger.LogSettings{
+			Level: strings.ToLower(level),
+			Path:  strings.ToLower(path),
+		})
+
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		logger.InitDefaultLogger()
+		log = logger.Get()
 	}
 
 	logger.SetDefaultLogger(log)
@@ -169,4 +178,8 @@ func (s *Service) GetContext() context.Context {
 
 func (s *Service) GetLogger() logger.Logger {
 	return s.loggerManager.GetLogger()
+}
+
+func (s *Service) GetSolanaRpcClient() *rpc.Client {
+	return s.solanaRpcClient
 }

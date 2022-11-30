@@ -34,7 +34,7 @@ func Get() Logger {
 		return defaultLogger
 	}
 
-	initDefaultLogger()
+	InitDefaultLogger()
 
 	return defaultLogger
 }
@@ -51,7 +51,7 @@ func Error() Event {
 	return Get().Error()
 }
 
-func initDefaultLogger() {
+func InitDefaultLogger() {
 	zl := zerolog.New(os.Stdout)
 	defaultLogger = &ZeroLogger{
 		logger: &zl,

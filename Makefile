@@ -24,5 +24,8 @@ run-indexer:
 run-mempool:
 	./bin/neon-mempool
 
+run-subscriber:
+	./bin/neon-subscriber
+
 # Empty rule for force run some targets always. 
 FORCE:
