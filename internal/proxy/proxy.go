@@ -10,13 +10,13 @@ import (
 type Proxy struct {
 	ctx             context.Context
 	solanaRpcClient *rpc.Client
-	logger          *logger.Logger
+	logger          logger.Logger
 }
 
 func NewProxy(
 	ctx context.Context,
 	solanaRpcClient *rpc.Client,
-	log *logger.Logger,
+	log logger.Logger,
 ) *Proxy {
 	return &Proxy{
 		ctx:             ctx,
