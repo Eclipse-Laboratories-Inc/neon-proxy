@@ -19,11 +19,6 @@ bin
 .DS_Store
 .idea
 
-# configs
-configs/**/*.*
-!configs/**/default.*
-!configs/**/.gitignore
-
 # tmp + logs
 tmp
 logs

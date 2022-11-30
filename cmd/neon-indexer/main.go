@@ -7,7 +7,7 @@ import (
 
 func main() {
 	s := service.CreateService(&configuration.Config{
-		Name: "proxy",
+		Name: "indexer",
 		Storage: &configuration.ConfigStorageList{
 			Postgres: []string{
 				"indexer",
@@ -15,11 +15,11 @@ func main() {
 		},
 	})
 
-	s.AddHandler(runProxy)
+	s.AddHandler(runIndexer)
 
 	s.Run()
 }
 
-func runProxy(s *service.Service) {
+func runIndexer(s *service.Service) {
 
 }

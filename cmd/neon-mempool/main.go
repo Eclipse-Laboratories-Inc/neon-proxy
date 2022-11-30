@@ -7,19 +7,19 @@ import (
 
 func main() {
 	s := service.CreateService(&configuration.Config{
-		Name: "proxy",
-		Storage: &configuration.ConfigStorageList{
-			Postgres: []string{
-				"indexer",
-			},
-		},
+		Name: "mempool",
+		// Storage: &configuration.ConfigStorageList{
+		// 	Postgres: []string{
+		// 		"indexer",
+		// 	},
+		// },
 	})
 
-	s.AddHandler(runProxy)
+	s.AddHandler(runMempool)
 
 	s.Run()
 }
 
-func runProxy(s *service.Service) {
+func runMempool(s *service.Service) {
 
 }
