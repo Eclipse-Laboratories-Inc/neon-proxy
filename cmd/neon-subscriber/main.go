@@ -18,7 +18,7 @@ func main() {
 }
 
 func runTransactionSubscriber(s *service.Service) {
-	cfg, err := subscriber.CreateFromEnv()
+	cfg, err := subscriber.CreateConfigFromEnv()
 	if err != nil {
 		panic(err)
 	}
