@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
+	"github.com/neonlabsorg/neon-proxy/pkg/metrics"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
 	"github.com/urfave/cli/v2"
 )
@@ -53,8 +55,12 @@ func CreateService(
 
 	s.initContext()
 	s.initCliApp(configuration.IsConsoleApp)
-	s.initLoggerManager()
+	s.initLoggerManager(configuration.Logger)
 	s.initSolana()
+
+	if !configuration.IsConsoleApp {
+		s.initMetrics(configuration.MetricsServer)
+	}
 
 	return s
 }
@@ -107,30 +113,22 @@ func (s *Service) initContext() {
 	s.ctx = ctx
 }
 
-func (s *Service) initLoggerManager() {
-	var level = os.Getenv("NEON_SERVICE_LOG_LEVEL")
-	var path = os.Getenv("NEON_SERVICE_LOG_PATH")
-
-	if level == "" {
+func (s *Service) initLoggerManager(cfg *configuration.LoggerConfiguration) {
+	if cfg.Level == "" {
 		if s.env == "development" {
-			level = "debug"
+			cfg.Level = "debug"
 		} else {
-			level = "info"
+			cfg.Level = "info"
 		}
 	}
 
-	if path == "" {
-		path = "logs"
-	}
-
-	var useFile = strings.ToLower(os.Getenv("NEON_SERVICE_LOG_USE_FILE"))
-
 	var log logger.Logger
 	var err error
-	if useFile != "" && (useFile == "true" || useFile == "t") {
+
+	if cfg.UseFile {
 		log, err = logger.NewLogger(s.name, logger.LogSettings{
-			Level: strings.ToLower(level),
-			Path:  strings.ToLower(path),
+			Level: strings.ToLower(cfg.Level),
+			Path:  strings.ToLower(cfg.FilePath),
 		})
 
 		if err != nil {
@@ -154,6 +152,32 @@ func (s *Service) initCliApp(isConsoleApp bool) {
 	if !isConsoleApp {
 		s.cliApp.Action = s.run
 	}
+}
+
+func (s *Service) initMetrics(cfg *configuration.MetricsServerConfiguration) {
+	if cfg.ListenAddress == "" || cfg.ListenPort == 0 || cfg.Interval == 0 {
+		s.GetLogger().Info().Msg("Metrics server inicialization has been skipped")
+		return
+	}
+
+	metricsServer := metrics.NewMetricsServer(
+		s.GetContext(),
+		cfg.ServiceName,
+		cfg.Interval,
+		fmt.Sprintf("%s:%d", cfg.ListenAddress, cfg.ListenPort),
+	)
+
+	if err := metricsServer.Init(); err != nil {
+		s.GetLogger().Error().Err(err).Msg("can't initialize metrics")
+		panic(err)
+	}
+
+	go func() {
+		if err := metricsServer.RunServer(); err != nil {
+			s.GetLogger().Error().Err(err).Msg("can't start metrics server")
+			panic(err)
+		}
+	}()
 }
 
 func (s *Service) ModifyCliApp(handler func(cliApp *cli.App)) {
