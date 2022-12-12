@@ -8,11 +8,6 @@ import (
 func main() {
 	s := service.CreateService(&configuration.Config{
 		Name: "mempool",
-		// Storage: &configuration.ConfigStorageList{
-		// 	Postgres: []string{
-		// 		"indexer",
-		// 	},
-		// },
 	})
 
 	s.AddHandler(runMempool)

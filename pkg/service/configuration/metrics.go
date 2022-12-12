@@ -17,9 +17,9 @@ type MetricsServerConfiguration struct {
 // LOAD METRICS CONFIGURATION
 func (c *ServiceConfiguration) loadMetricsServerConfiguration(serviceName string) error {
 	serviceName = strings.ToUpper(serviceName)
-	listenAddr := os.Getenv(fmt.Sprintf("SERVICE_%s_METRICS_LISTEN_ADDRESS", serviceName))
-	listenPortString := os.Getenv(fmt.Sprintf("SERVICE_%s_METRICS_LISTEN_PORT", serviceName))
-	intervalString := os.Getenv(fmt.Sprintf("SERVICE_%s_METRICS_INTERVAL", serviceName))
+	listenAddr := os.Getenv(fmt.Sprintf("NS_METRICS_%s_LISTEN_ADDRESS", serviceName))
+	listenPortString := os.Getenv(fmt.Sprintf("NS_METRICS_%s_LISTEN_PORT", serviceName))
+	intervalString := os.Getenv(fmt.Sprintf("NS_METRICS_%s_INTERVAL", serviceName))
 
 	port, err := strconv.Atoi(listenPortString)
 	if err != nil {

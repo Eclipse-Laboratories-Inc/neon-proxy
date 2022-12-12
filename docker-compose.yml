@@ -1,0 +1,131 @@
+version: "3"
+services:
+  indexer-db:
+    container_name: indexer-db
+    hostname: indexer-db
+    image: postgres:13
+    # volumes:
+    #   - ./init_db.sql:/docker-entrypoint-initdb.d/1-schema.sql
+    environment:
+      POSTGRES_USER: ${NS_DB_INDEXER_USERNAME:-indexer}
+      POSTGRES_PASSWORD: ${NS_DB_INDEXER_PASSWORD:-indexerpass}
+      POSTGRES_DB: indexer
+    expose:
+      - "5432"
+    ports:
+      - "5432"
+    networks:
+      - proxy-net
+
+  neon-mempool:
+    container_name: neon-mempool
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: neon-mempool
+    environment:
+      NEON_SERVICE_ENV: development
+      NS_LOG_LEVEL: info
+      NS_LOG_USE_FILE: false
+      NS_SOLANA_URL: http://solana:8899
+      NS_METRICS_MEMPOOL_LISTEN_ADDRESS: "127.0.0.1"
+      NS_METRICS_MEMPOOL_LISTEN_PORT: 20504
+      NS_METRICS_MEMPOOL_INTERVAL: 5 # 5 seconds
+    expose:
+      - "20504"
+    ports:
+      - 20504
+    networks:
+      - proxy-net
+
+  neon-proxy:
+    container_name: neon-proxy
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: neon-proxy
+    environment:
+      NEON_SERVICE_ENV: development
+      NS_LOG_LEVEL: info
+      NS_LOG_USE_FILE: false
+      NS_SOLANA_URL: http://solana:8899
+      NS_DB_INDEXER_HOSTNAME: "indexer-db"
+      NS_DB_INDEXER_POST: 5432
+      NS_DB_INDEXER_SSLMODE: disable
+      NS_DB_INDEXER_USERNAME: "indexer"
+      NS_DB_INDEXER_PASSWORD: "indexerpass"
+      NS_DB_INDEXER_DATABASE: "indexer"
+      NS_METRICS_PROXY_LISTEN_ADDRESS: "127.0.0.1"
+      NS_METRICS_PROXY_LISTEN_PORT:  20501
+      NS_METRICS_PROXY_INTERVAL: 5 # 5 seconds
+    depends_on:
+      - indexer-db
+      - neon-mempool
+    expose:
+      - "20501"
+    ports:
+      - 20501
+    networks:
+      - proxy-net
+
+  neon-indexer:
+    container_name: neon-indexer
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: neon-indexer
+    environment:
+      NEON_SERVICE_ENV: development
+      NS_LOG_LEVEL: info
+      NS_LOG_USE_FILE: false
+      NS_SOLANA_URL: http://solana:8899
+      NS_DB_INDEXER_HOSTNAME: "indexer-db"
+      NS_DB_INDEXER_POST: 5432
+      NS_DB_INDEXER_SSLMODE: disable
+      NS_DB_INDEXER_USERNAME: "indexer"
+      NS_DB_INDEXER_PASSWORD: "indexerpass"
+      NS_DB_INDEXER_DATABASE: "indexer"
+      NS_METRICS_INDEXER_LISTEN_ADDRESS: "127.0.0.1"
+      NS_METRICS_INDEXER_LISTEN_PORT:  20502
+      NS_METRICS_INDEXER_INTERVAL: 5 # 5 seconds
+    depends_on:
+      - indexer-db
+    expose:
+      - "20502"
+    ports:
+      - 20502
+    networks:
+      - proxy-net
+
+  neon-subscriber:
+    container_name: neon-subscriber
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: neon-subscriber
+    environment:
+      NEON_SERVICE_ENV: development
+      NS_LOG_LEVEL: info
+      NS_LOG_USE_FILE: false
+      NS_SOLANA_URL: http://solana:8899
+      NS_DB_INDEXER_HOSTNAME: "indexer-db"
+      NS_DB_INDEXER_POST: 5432
+      NS_DB_INDEXER_SSLMODE: disable
+      NS_DB_INDEXER_USERNAME: "indexer"
+      NS_DB_INDEXER_PASSWORD: "indexerpass"
+      NS_DB_INDEXER_DATABASE: "indexer"
+      NS_METRICS_SUBSCRIBER_LISTEN_ADDRESS: "127.0.0.1"
+      NS_METRICS_SUBSCRIBER_LISTEN_PORT:  20503
+      NS_METRICS_SUBSCRIBER_INTERVAL: 5 # 5 seconds
+      NEON_SUBSCRIBER_INTERVAL: 5 # 5 seconds
+    depends_on:
+      - indexer-db
+    expose:
+      - "20503"
+    ports:
+      - 20503
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
