@@ -189,7 +189,7 @@ func (s *Service) GetEnvironment() string {
 }
 
 func (s *Service) GetContext() context.Context {
-	return s.ctx 
+	return s.ctx
 }
 
 func (s *Service) GetLogger() logger.Logger {
