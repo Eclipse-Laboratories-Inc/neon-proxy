@@ -20,8 +20,8 @@ type Server struct {
 // create initial server structure with source nil
 func NewServer(ctx context.Context) *Server {
   return &Server{
-		ctx:            ctx,
-		source:         make(chan Transaction, 0),
+    ctx:            ctx,
+    source:         make(chan Transaction, 0),
     sourceError:    make(chan error),
     listeners:      make([]chan Transaction, 0),
     addListener:    make(chan (chan Transaction)),
@@ -30,9 +30,9 @@ func NewServer(ctx context.Context) *Server {
 }
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  8192,
-	WriteBufferSize: 8192,
-	CheckOrigin:     func(r *http.Request) bool { return true },
+  ReadBufferSize:  8192,
+  WriteBufferSize: 8192,
+  CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 // subscribing to the serverc
@@ -98,11 +98,11 @@ func (server *Server) StartBroadcaster() {
 }
 
 func (server * Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
-	// upgrade this connection to a WebSocket
-	ws, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		fmt.Println(err)
-	}
+  // upgrade this connection to a WebSocket
+  ws, err := upgrader.Upgrade(w, r, nil)
+  if err != nil {
+  	fmt.Println(err)
+  }
 
   // subscribe to transaction
   transactions := server.Subscribe()
@@ -115,9 +115,9 @@ func (server * Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
     select {
     case transaction := <- transactions:
       if err := ws.WriteMessage(1, []byte(transaction.signature)); err != nil {
-  			fmt.Println(err)
-  			return
-  		}
+      	fmt.Println(err)
+      	return
+      }
     case <- server.ctx.Done():
       return
     }
