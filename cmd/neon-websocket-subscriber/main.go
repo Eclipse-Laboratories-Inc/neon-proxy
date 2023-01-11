@@ -25,7 +25,7 @@ func runTransactionProxy(s *service.Service) {
 		panic(err)
 	}
 
-	transactionSubscriber := websocket.NewTransactionProxy(
+	transactionSubscriber := websocket.NewTransactionSubscriber(
 		cfg,
 		s.GetContext(),
 		s.GetLogger(),

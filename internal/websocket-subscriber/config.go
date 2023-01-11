@@ -10,12 +10,12 @@ const (
     websocketPort = "NEON_WEBSOCKET_PORT"
 )
 
-type TransactionProxyConfig struct {
+type TransactionSubscriberConfig struct {
   solanaWebsocketEndpoint string
   websocketPort string
 }
 
-func CreateConfigFromEnv() (cfg *TransactionProxyConfig, err error) {
+func CreateConfigFromEnv() (cfg *TransactionSubscriberConfig, err error) {
   // check if endpoint is set in env
   solanaWssEndpoint := os.Getenv(neonSolanaWebsocketEnv)
   if len(solanaWssEndpoint) == 0 {
@@ -28,7 +28,7 @@ func CreateConfigFromEnv() (cfg *TransactionProxyConfig, err error) {
     websocketPort = "8080"
   }
 
-	return &TransactionProxyConfig{
+	return &TransactionSubscriberConfig{
     solanaWebsocketEndpoint: solanaWssEndpoint,
     websocketPort: websocketPort,
   }, nil

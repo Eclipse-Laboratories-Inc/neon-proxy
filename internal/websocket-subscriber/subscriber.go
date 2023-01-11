@@ -16,19 +16,19 @@ type Transaction struct {
 	signature string
 }
 
-type TransactionProxy struct {
-	cfg             *TransactionProxyConfig
+type TransactionSubscriber struct {
+	cfg             *TransactionSubscriberConfig
 	ctx             context.Context
 	logger          logger.Logger
 	subscriberError chan error
 }
 
-func NewTransactionProxy(
-	cfg *TransactionProxyConfig,
+func NewTransactionSubscriber(
+	cfg *TransactionSubscriberConfig,
 	ctx context.Context,
 	log logger.Logger,
-) *TransactionProxy {
-	return &TransactionProxy{
+) *TransactionSubscriber {
+	return &TransactionSubscriber{
 		cfg:             cfg,
 		ctx:             ctx,
 		logger:          log,
@@ -36,7 +36,7 @@ func NewTransactionProxy(
 	}
 }
 
-func (s *TransactionProxy) Run() error {
+func (s *TransactionSubscriber) Run() error {
 	// start socket server for enabling users to subscribe to transactions
 	webServer := NewServer(s.ctx)
 
@@ -52,7 +52,7 @@ func (s *TransactionProxy) Run() error {
 	return nil
 }
 
-func (s *TransactionProxy) subscribeToTransactions(server *Server) {
+func (s *TransactionSubscriber) subscribeToTransactions(server *Server) {
 	// connect to running solana websocket and create client
 	client, err := ws.Connect(s.ctx, s.cfg.solanaWebsocketEndpoint)
 	if err != nil {
