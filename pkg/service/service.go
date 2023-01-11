@@ -9,6 +9,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"github.com/neonlabsorg/neon-proxy/pkg/metrics"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
@@ -25,6 +26,7 @@ type Service struct {
 	cliApp          *cli.App
 	cliContext      *cli.Context
 	loggerManager   *LoggerManager
+	solanaRpcClient *rpc.Client
 	handlers        []func(service *Service)
 }
 
@@ -54,6 +56,7 @@ func CreateService(
 	s.initContext()
 	s.initCliApp(configuration.IsConsoleApp)
 	s.initLoggerManager(configuration.Logger)
+	s.initSolana()
 
 	if !configuration.IsConsoleApp {
 		s.initMetrics(configuration.MetricsServer)
@@ -89,6 +92,11 @@ func (s *Service) run(cliContext *cli.Context) (err error) {
 	s.loggerManager.GetLogger().Info().Msgf("Service %s has been stopped", s.name)
 
 	return
+}
+
+func (s *Service) initSolana() {
+	solanaURL := os.Getenv("NS_SOLANA_URL")
+	s.solanaRpcClient = rpc.New(solanaURL)
 }
 
 func (s *Service) initContext() {
@@ -194,4 +202,8 @@ func (s *Service) GetContext() context.Context {
 
 func (s *Service) GetLogger() logger.Logger {
 	return s.loggerManager.GetLogger()
+}
+
+func (s *Service) GetSolanaRpcClient() *rpc.Client {
+	return s.solanaRpcClient
 }
