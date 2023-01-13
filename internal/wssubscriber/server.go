@@ -1,4 +1,4 @@
-package proxy
+package wssubscriber
 
 import (
   "net/http"

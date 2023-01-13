@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/neonlabsorg/neon-proxy/pkg/service"
-	websocket "github.com/neonlabsorg/neon-proxy/internal/websocket-subscriber"
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
 )
 
@@ -20,12 +20,12 @@ func main() {
 }
 
 func runTransactionProxy(s *service.Service) {
-	cfg, err := websocket.CreateConfigFromEnv()
+	cfg, err := wssubscriber.CreateConfigFromEnv()
 	if err != nil {
 		panic(err)
 	}
 
-	transactionSubscriber := websocket.NewTransactionSubscriber(
+	transactionSubscriber := wssubscriber.NewTransactionSubscriber(
 		cfg,
 		s.GetContext(),
 		s.GetLogger(),
