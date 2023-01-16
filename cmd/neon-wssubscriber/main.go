@@ -10,7 +10,7 @@ import (
 
 func main() {
 	s := service.CreateService(&configuration.Config{
-		Name: "proxy",
+		Name: "wssubscriber",
 		// Storage: &configuration.ConfigStorageList{},
 	})
 
