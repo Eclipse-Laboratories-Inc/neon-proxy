@@ -27,7 +27,78 @@ In directory ~proxy-model.py/proxy~ we have:
 
 ..and ~testing~. From folder testing we can starts all components, see docker-compose-test.yml
 
-** Indexer
+* Mempool
+
+#EntryPoint: proxy/neon_rpc_api_model/neon_rpc_api_worker.py
+
+#ProcessList:
+#+BEGIN_SRC sh
+  /bin/bash proxy/run_test_proxy.sh
+     /bin/bash proxy/run_proxy.sh
+        /python3 -m proxy --hostame 0.0.0.0 --port 9090 --enable-web-server --plugins proxy.plugin.NeonRpcAPiPlugin
+#+END_SRC
+
+#EntryPoint: proxy/neon_proxy_app.py
+This is entry point of NeonProxyApp.
+
+In the init() and start() starts:
+- service MPService - Mempool and
+- service ProxyStatService (stats for Prometheus)
+
+Plugin accept connections from the users and processes (_process_request at proxy/plugin/neon_rpc_api_plugin.py) for example request from Etheriim Clients
+
+getModel starts hadling process request and have thread local variables (actually global python process) for processing, implements sigleton, locks, etc.
+
+See handle_request at proxy/plugin/neon_rpc_api_plugin.py
+- accept http-request
+- parse input json
+- call _process_request
+  - dispatch method for processing request
+
+All methods were imlemented in neon_rpc_api_worker. Method should have prefix like "neon_", "web3_", "eth_".
+
+Proxy have private methods, which could be called from local nodes, see ~private_method_set~
+
+Each entrypoint has own client for the Mempool and if request should be send to the Mempool it will be sent by the call of the method. For example when user create Etherium transaction at the first moment it should call the methods to get the transaction which were processed on the network use this number as nonce in the Etherium transaction.
+
+When user sent several transactions to the network and they not accepted by the network to the blocks, such transactions has tag "pending". They ready to input into blocks, but may be lowest price etc. See eth_GetTransactionCount for reference.
+
+If tag is "pending", to get the latest transaction from it, to return to the Client. Each method of the mempool_client.py will be create request structure like MPPendingTxNonceRequest and then it will be sent to the Mempool.
+
+On Mempool service (are placed into proxy/mempool/mempool_service.py) when Mempool will accept this request it will be process (def process_mp_request). There is dispatcher, it can be:
+- SendTransaction
+- GetPendingTransactionNonce
+- ...
+
+In addition (doesnt exists on Etherium) there is another functuions needs for processing Solana functions.
+
+Also in the Mempool we store the latest gas price. It is need to the filter transactions which is possble to execute.
+
+And we can process request about last parameters of the NeonEVM (def getElfParamDict).
+
+After receive request from the user, requst sended to the mempool_service.py, to dispatch request, go to the dictionary of pending transactions (by sender), we will get the last nonce in the mempool, and return to the worker. Worker to get the last Nonce from the for what? [TODO:gmm] Explain it.
+
+Mempool chech and choose value, which will return.
+
+If we compact transaction without any problem, then we try to get the recive for such transaction. Becouse transaction can be already pricessed by the Solana. We sholdn't sent to Client transactions, which already known. We do "precheck" (see eth_SendRawTransaction at neon_rpc_api_model/neon_rpc_api_worker.py). On this step we check the fields of the transaction, for example check the Nonce is valid value, check the Gas in the limits, check chain_id, size of the transaction.
+
+After than we will emulatate of the transaction (see precheck at transaction_validator.py which call emulator_intractor.py). We use NeonCLI for it. NeonCLI will accept transaction, parse it, and will try to execute, load contract from the Solana node, retrieve data from Solana node. On the end of execution NeonCLI will be return the result of execution, of something goes wrong it will return the error. We will check the returned value. We can see text of error in our Metamask which contains text from the Solana.
+
+Then we prevalidate (see prevalidate_tx at transaction_validator) for checking limits of out platform? for example account size in the Solana, estimate gas limits in the transaction. If something goes wrong we will return.
+
+Check for EIP 1055) [TODO:gmm] - explain it.
+
+After it we add tx to the list txs for execution (see add_tx at mempool_schedule.py). If transaction already exists on the Mempool we will return error to the Client. If transaction has the same Nonce we will check the gas_price and replace transaction in the Mempool by increased gas_price.
+
+A mempool has a capacity, and if there are too many transactions, we drop transactions with a lower gas price (see check_oversized_and_reduce at mempool_schedule.py)
+
+If everything is okay, transaction will be accepted and answer will be returned to worker. Worker check the answer. If is okay, worker returns the hash of transaction, otherwise handle of errors (see ::561 at neon_rpc_api_worker.py).
+
+Mempool has a task, which run periodically throuth event-loop for execute transactions (see begin of mempool/mempool.py and process_tx_schedule_loop). Mempool has list of workers
+
+[TODO:gmm] 30:13
+
+* Indexer
 
 #EntryPoint: ~proxy/indexer/indexer_app.py~
 #Purpose:
@@ -37,7 +108,7 @@ In directory ~proxy-model.py/proxy~ we have:
   - index them
   - store index into Postgres
 
-*** How it works
+** How it works
 
 class ~IndexerDB~:
 - contains db-connection
@@ -102,11 +173,11 @@ Proxy will use this information for the Etherium Client (see ~eth_getBlockTransa
 
 If database doesn't contains block, it wilk generate fake block (see ~_block_from_value~ and ~_generate_fake_block_hash~). Proxy doesn't pull fake blocks from database, instead of it proxy returns empty block (doesn't contans transactions but formatted properly, with zeroes in data fields).
 
-*** Data structures
+** Data structures
 
 ~ix_decoder_list~ at indexer/indexer.py contains list of instrucions if NeonEVM. The same file contains the transaction ~executor~ (class WriteHolderAccountIx)
 
-*** TODO What do we need to explain
+** TODO What do we need to explain
 
 - format of the Solana blocks and transactions, finalized and confirmed
 - branches in Solana
