@@ -94,9 +94,61 @@ A mempool has a capacity, and if there are too many transactions, we drop transa
 
 If everything is okay, transaction will be accepted and answer will be returned to worker. Worker check the answer. If is okay, worker returns the hash of transaction, otherwise handle of errors (see ::561 at neon_rpc_api_worker.py).
 
-Mempool has a task, which run periodically throuth event-loop for execute transactions (see begin of mempool/mempool.py and process_tx_schedule_loop). Mempool has list of workers
+Mempool has a task, which run periodically throuth event-loop for execute transactions (see begin of mempool/mempool.py and process_tx_schedule_loop).
 
-[TODO:gmm] 30:13
+Mempool has list of workers which will be executed of transaction. When the project was started the Solana-library for python was implemented it only in sync-mode. This way Mempool doesnt send transaction directly to Solana. Instead of it Mempool uses additional process (a lot of it's)
+
+process_tx_shedule_loop at mempool/mempool.py is responsible of it. It check the available executor, enqueue_tx_request(), select transaction by the highest price. And if gas_price is enought transcation will be proceessed by the proxy. If not, such transactions will not, it will continue waiting for gas_price goes down.
+
+Also for transaction processing we need additional ~resources~ for processing. We need:
+- the account which will pay for transaction execution
+- the acconts which store EVM state for iterative mode for transaction execution
+- the accounts which store the Etheriuim transaction if the size of transaction is biggest them limit of Solana trasaction (1400 bytes in 2 packets, Etherium transaction can be 100 kB)
+
+If transaction is big, first step is we will price the transaction to the Solana account and then we will call NeonEVM program to process it.
+
+After choose the transaction (in enqueue_tx_request()) and resources then we send (~executor_mng.submit_mp_request(tx)~)
+
+mempool/mempool_executor contains the ~Executor.
+
+Executor has a several tasks which process and first and important of it is ~exec_neon_tx_task.execute_neon_tx(tx). Implemetation of it use NeonTxSendStrategyExecutor which provide several stategyes depend of tx characteristics:
+
+| tx small by size and gas    | process by one Solana tx (SimpleNeonTxStrategy)                                              |
+| tx is big                   | IterativeNeonTxStrategy                                                                      |
+| tx is big                   | save to the Solana account (HolderNeonTxStrategy)                                            |
+| tx has more the 43 accounts | use additional tx for create AddressLookupTables for increase accs (ALTSimpleNeonTxStrategy) |
+|                             | [TODO:gmm] Other strategyes implememted in mempool executor?                                 |
+
+When Executor receive tx for execution, it will choose the strategy for execution (def execute). Each Strategy will check the parameters of tx and if it can processed - it will processed. If it cannot it return the False on the Validate-step and Executor will try the next Strategy. Strategy method validate check the exeption for checking appropriate txs.
+
+About transaction with Address Lookup Tables:
+
+[TODO:gmm] - I cannot understand explanation it on 41:41, need return to it after read how to Solana works, and try again
+
+The transaction processing will be splitted on the several steps. On each step we should wait the result of execution. For example, before we using addres in lookup tables in Solana transaction we should do the several steps:
+- create the address lookup tables
+- wait it will be created
+- receive information of adress lookup tables was created when Solana block is generated
+- then we should write addres of the account which will be used into addres lookup tables
+- and wait the next block of Solana, becouse only after block generated, Solana returns path the receive to execution
+- after that we should wait one block, becouse it impossible use address lookup table in the same block
+- only after thet we can create Solana transaction for NeonEVM program which will use addres lookup tables, which created on the previous steps
+
+So, thats mean then we should choose the simplest type of transactions for Etherium transaction, which we writen to Solana account before execution with address lookup tables will require about 3 Solana blocks gets the result of execution. On the first block we will create the address lookup table and write Etherium transaction into Solana account, we will wait the receives of execution of this transactions. Then we will write account into addres lookup tables and wait till this block will be generated and confirmed by the Solana cluster. And only after that we will send the transaction for NeonEVM execution.
+
+_make_tx_step_ix creates the Solana transaction and contaions pubkeys refernces:
+
+| _holder                | account with Etherium transaction                                      |
+| _operator_account      | which it will be paid for the Solana tx execution                      |
+| _treasure_pool_address | pool which operator uses for pay for fee Neon tx processing            |
+| _operator_neon_address | account which use for pay for operator ([TODO:gmm] - What?)            |
+| SYS_PROGRAM_ID         | need include to the list of accounts, because it's required by NeonEVM |
+| _evm_program_id        | address of out EVM programm                                            |
+
+also we add the list of accounts, wich will be used during Etherium-like transaction execution
+
+[TODO:gmm] -=HERE=- 48:56
+
 
 * Indexer
 
