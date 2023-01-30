@@ -145,10 +145,13 @@ _make_tx_step_ix creates the Solana transaction and contaions pubkeys refernces:
 | SYS_PROGRAM_ID         | need include to the list of accounts, because it's required by NeonEVM |
 | _evm_program_id        | address of out EVM programm                                            |
 
-also we add the list of accounts, wich will be used during Etherium-like transaction execution
+also we add (to SolTxIx which returned from _make_tx_step_ix) the list of accounts, wich will be used during Etherium-like transaction execution
 
-[TODO:gmm] -=HERE=- 48:56
+"_sent_tx_list()" sends tx directly to Solana. After sending transaction we are waiting for receipt (confirmation from the Solana). First step is waiting to acception the transaction for include into the pool of the Solana _wait_for_tx_receipt_list(). After it we will pass the result of execution. Solana can return us several errors, it's will decoded in _decode_tx_status() at solana_tx_list_sender.py. For example transaction can be already executed in another block and so on. Sometimes we will created Solana transaction again and try to send it again.
 
+If everything is okay with the transaction wil try to get the result of execution. NeonEVM generates Etherium receipt and write it into locks of Solana trasaction (see decode_neon_log at proxy/common_neone/evm_lock_decoder.py - it write some information into logs of the Solana transaction) We can see it on solscan.io
+
+Executor try to find this records in Solana logs. If it finded it then it will understand the transaction is completed. This information also used by indexer part.
 
 * Indexer
 
