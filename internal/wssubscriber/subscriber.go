@@ -1,10 +1,7 @@
 package wssubscriber
 
 import (
-	"fmt"
 	"context"
-
-	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 )
 
@@ -16,19 +13,19 @@ type Transaction struct {
 	signature string
 }
 
-type TransactionSubscriber struct {
-	cfg             *TransactionSubscriberConfig
+type WSSubscriber struct {
+	cfg             *WSSubscriberConfig
 	ctx             context.Context
 	logger          logger.Logger
 	subscriberError chan error
 }
 
-func NewTransactionSubscriber(
-	cfg *TransactionSubscriberConfig,
+func NewWSSubscriber(
+	cfg *WSSubscriberConfig,
 	ctx context.Context,
 	log logger.Logger,
-) *TransactionSubscriber {
-	return &TransactionSubscriber{
+) *WSSubscriber {
+	return &WSSubscriber{
 		cfg:             cfg,
 		ctx:             ctx,
 		logger:          log,
@@ -36,46 +33,23 @@ func NewTransactionSubscriber(
 	}
 }
 
-func (s *TransactionSubscriber) Run() error {
-	// start socket server for enabling users to subscribe to transactions
-	webServer := NewServer(s.ctx)
-
-	// subscribe to transactions from node
-	go s.subscribeToTransactions(webServer)
-
-	// start broadcasting
-	go webServer.StartBroadcaster()
+func (s *WSSubscriber) Run() error {
+	// for checking registration errors
+	var err error
 
 	// start server
-	go webServer.StartServer(s.cfg.websocketPort)
+	server := NewServer(&s.ctx)
+
+	// create and register new heads broadcaster and start pulling new heads
+	if server.newHeadsBroadcaster, err = server.GetNewHeadBroadcaster(s.cfg.solanaWebsocketEndpoint); err != nil {
+		return err
+	}
+
+	// create and register new pending transaction broadcaster and start pulling new transactions
+	//go server.RegisterNewPendingTransactionBroadcaster(NewPendingTransactionBroadcaster(s.cfg.solanaWebsocketEndpoint)).Start()
+
+	// start ws server for incoming subscriptions
+	go server.StartServer(s.cfg.wssubscriberPort)
 
 	return nil
-}
-
-func (s *TransactionSubscriber) subscribeToTransactions(server *Server) {
-	// connect to running solana websocket and create client
-	client, err := ws.Connect(s.ctx, s.cfg.solanaWebsocketEndpoint)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	// subscribe to "all"  transactions that are "finalized"
-	subscription, err := client.LogsSubscribe("all", "finalized")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	// subscribe to every result coming into the channel
-	for {
-		result, err := subscription.Recv()
-		if err != nil {
-			server.sourceError <- err
-			fmt.Println(err)
-			return
-		} else {
-			server.source <- Transaction{signature: result.Value.Signature.String()}
-		}
-	}
 }

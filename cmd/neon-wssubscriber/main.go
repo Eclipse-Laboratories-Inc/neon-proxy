@@ -14,24 +14,24 @@ func main() {
 		// Storage: &configuration.ConfigStorageList{},
 	})
 
-	s.AddHandler(runTransactionProxy)
+	s.AddHandler(runWSSubscriberProxy)
 
 	s.Run()
 }
 
-func runTransactionProxy(s *service.Service) {
+func runWSSubscriberProxy(s *service.Service) {
 	cfg, err := wssubscriber.CreateConfigFromEnv()
 	if err != nil {
 		panic(err)
 	}
 
-	transactionSubscriber := wssubscriber.NewTransactionSubscriber(
+	subscriber := wssubscriber.NewWSSubscriber(
 		cfg,
 		s.GetContext(),
 		s.GetLogger(),
 	)
 
-	err = transactionSubscriber.Run()
+	err = subscriber.Run()
 	if err != nil {
 		fmt.Println(err)
 	}

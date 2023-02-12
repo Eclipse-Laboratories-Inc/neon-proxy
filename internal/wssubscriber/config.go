@@ -7,29 +7,44 @@ import (
 
 const (
     neonSolanaWebsocketEnv = "NEON_WEBSOCKET_ENDPOINT"
-    websocketPort = "NEON_WEBSOCKET_PORT"
+    wssubscriberPort = "NEON_WEBSOCKET_PORT"
 )
 
-type TransactionSubscriberConfig struct {
+type WSSubscriberConfig struct {
   solanaWebsocketEndpoint string
-  websocketPort string
+  wssubscriberPort string
 }
 
-func CreateConfigFromEnv() (cfg *TransactionSubscriberConfig, err error) {
+func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
   // check if endpoint is set in env
   solanaWssEndpoint := os.Getenv(neonSolanaWebsocketEnv)
   if len(solanaWssEndpoint) == 0 {
     return nil, errors.New(neonSolanaWebsocketEnv + " env variable not set")
   }
 
-  // check if endpoint is set in env
-  websocketPort := os.Getenv(websocketPort)
-  if len(websocketPort) == 0 {
-    websocketPort = "8080"
+  // check if port is set in env
+  port := os.Getenv(wssubscriberPort)
+  if len(port) == 0 {
+    port = "8080"
   }
 
-	return &TransactionSubscriberConfig{
+	return &WSSubscriberConfig{
     solanaWebsocketEndpoint: solanaWssEndpoint,
-    websocketPort: websocketPort,
+    wssubscriberPort: port,
   }, nil
 }
+
+var headSubscribe = `{
+  "jsonrpc": "2.0",
+  "id": "1",
+  "method": "blockSubscribe",
+  "params": [
+    "all",
+    {
+      "commitment": "confirmed",
+      "encoding": "jsonParsed",
+      "showRewards": false,
+      "transactionDetails": "signatures"
+    }
+  ]
+}`
