@@ -42,7 +42,7 @@ func (server * Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
 	// listen for incoming subscriptions.
 	go client.ReadPump()
 
-  // send subscription data back to user
+	// send subscription data back to user
 	go client.WritePump()
 }
 
@@ -51,13 +51,13 @@ func (server *Server) GetNewHeadBroadcaster(solanaWSEndpoint string) (*Broadcast
   broadcaster := NewBroadcaster(server.ctx)
 
   // register source and sourceError for broadcaster that will we solana endpoint pulling new heads
-	err := RegisterNewHeadBroadcasterSources(server.ctx, solanaWSEndpoint, broadcaster.source, broadcaster.sourceError)
-	if err != nil {
-		return nil, err
-	}
+  err := RegisterNewHeadBroadcasterSources(server.ctx, solanaWSEndpoint, broadcaster.source, broadcaster.sourceError)
+  if err != nil {
+    return nil, err
+  }
 
   // start broadcasting incoming new heads to subscribers
-	go broadcaster.Start()
+  go broadcaster.Start()
 
   return broadcaster, nil
 }

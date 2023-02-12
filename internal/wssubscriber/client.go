@@ -12,10 +12,10 @@ import (
 
 type Client struct {
   // The websocket connection.
-	conn *websocket.Conn
+  conn *websocket.Conn
 
-	// Buffered channel of outbound messages.
-	clientResponseBuffer chan []byte
+  // Buffered channel of outbound messages.
+  clientResponseBuffer chan []byte
 
   // client locker
   cMu sync.Mutex
@@ -36,11 +36,11 @@ type Client struct {
 }
 
 const (
-	// Time allowed to write a message to the peer.
-	deadline = 3 * time.Second
+  // Time allowed to write a message to the peer.
+  deadline = 3 * time.Second
 
-	// Maximum message size allowed from peer.
-	maxMessageSize = 4096
+  // Maximum message size allowed from peer.
+  maxMessageSize = 4096
 
   // rpc version
   rpcVersion = "2.0"
@@ -105,18 +105,18 @@ func (c *Client) ReadPump() {
 		}
 
     // process request
-		response := c.ProcessSubscription(bytes.TrimSpace(bytes.Replace(message, []byte{'\n'}, []byte{' '}, -1)));
+		response := c.ProcessRequest(bytes.TrimSpace(bytes.Replace(message, []byte{'\n'}, []byte{' '}, -1)));
     res, _ := json.Marshal(response)
     c.sendMessage(res)
 	}
 }
 
-// unmarshall subscription request
-func (c *Client) ProcessSubscription(request []byte) (responseRPC SubscribeJsonResponseRCP) {
+// based on request data we determine what kind of subscription it is and make specific subscription for client (or unsubscribe)
+func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonResponseRCP) {
   // prepare response
   responseRPC.Version = rpcVersion
 
-  // unmarshall client request
+  // unmarshal request
   var requestRPC SubscribeJsonRPC
   if err := json.Unmarshal(request, &requestRPC); err != nil {
     responseRPC.Error = err.Error()
@@ -175,21 +175,21 @@ func (c *Client) WritePump() {
 		case message, ok := <-c.clientResponseBuffer:
 			c.conn.SetWriteDeadline(time.Now().Add(deadline))
 			if !ok {
-        // channel closed
+			  // channel closed
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
-      // create new writer
+			// create new writer
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				return
 			}
 
-      // send next data chunk
+			// send next data chunk
 			w.Write(message)
 
-      // close current writer
+			// close current writer
 			if err := w.Close(); err != nil {
 				return
 			}
