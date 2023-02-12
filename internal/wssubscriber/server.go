@@ -4,6 +4,7 @@ import (
   "context"
   "net/http"
   "fmt"
+  "log"
 
   "github.com/gorilla/websocket"
 )
@@ -65,5 +66,6 @@ func (server *Server) GetNewHeadBroadcaster(solanaWSEndpoint string) (*Broadcast
 // start listening to incoming subscription connections
 func (server * Server) StartServer(port string) {
   http.HandleFunc("/", server.wsEndpoint)
+  log.Println("starting on ", port)
   fmt.Println(http.ListenAndServe(":" + port, nil))
 }

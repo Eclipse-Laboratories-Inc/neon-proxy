@@ -20,6 +20,9 @@ type Client struct {
   // client locker
   cMu sync.Mutex
 
+  // client closer once
+  closeOnlyOnce sync.Once
+
   // head broadcaster instance
   newHeadsBroadcaster *Broadcaster
   newHeadsSource chan interface{}
@@ -46,7 +49,7 @@ const (
   rpcVersion = "2.0"
 
   // subscription method
-  methodSubscription = "eth_subscription"
+  methodSubscription = "eth_subscribe"
   methodUnsubscription = "eth_unsubscribe"
 
   subscriptionNewHeads = "newHeads"
@@ -101,6 +104,7 @@ func (c *Client) ReadPump() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
+      c.Close()
 			break
 		}
 
@@ -120,6 +124,7 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
   var requestRPC SubscribeJsonRPC
   if err := json.Unmarshal(request, &requestRPC); err != nil {
     responseRPC.Error = err.Error()
+    return
   }
 
   // set corresponding response id
@@ -128,21 +133,25 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
   // check rpc version
   if requestRPC.Method != methodSubscription &&  requestRPC.Method != methodUnsubscription {
     responseRPC.Error = "method incorrect"
+    return
   }
 
   // check request id to be valid
   if requestRPC.ID == 0 {
     responseRPC.Error = "id must be greater than 0"
+    return
   }
 
   // check params
   if len(requestRPC.Params) < 1 {
     responseRPC.Error = "Incorrect subscription parameters"
+    return
   }
 
   // check subscription type is correct
   if reflect.TypeOf(requestRPC.Params[0]).Name() != "string" {
     responseRPC.Error = "Incorrect parameter 0"
+    return
   }
 
   // activate subscription based on type
@@ -157,6 +166,7 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
       c.subscribeNewPendingTransactions(requestRPC, &responseRPC)
   default:
       responseRPC.Error = "subscription type not found"
+      return
   }
 
   return responseRPC
@@ -168,8 +178,7 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
 // application ensures that there is at most one writer to a connection by
 // executing all writes from this goroutine.
 func (c *Client) WritePump() {
-	defer c.conn.Close()
-
+	defer c.Close()
 	for {
 		select {
 		case message, ok := <-c.clientResponseBuffer:
@@ -306,5 +315,10 @@ func (c *Client) CollectNewHeads() {
 }
 
 func (c *Client) Close() {
-
+  c.closeOnlyOnce.Do(func() {
+    c.conn.Close()
+    c.newHeadsBroadcaster.CancelSubscription(c.newHeadsSource)
+    //c.pendingTransactionsBroadcaster.CancelSubscription(c.pendingTransactionsSource)
+    close(c.clientResponseBuffer)
+ 	})
 }
