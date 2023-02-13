@@ -237,3 +237,5 @@ If database doesn't contains block, it wilk generate fake block (see ~_block_fro
 - format of the Solana blocks and transactions, finalized and confirmed
 - branches in Solana
 - decription of NeonEVM (commands)
+
+* TODO Proxy deployment
