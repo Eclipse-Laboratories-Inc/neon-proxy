@@ -52,6 +52,10 @@ func (broadcaster *Broadcaster) closeListeners() {
   }
 }
 
+/*
+  Start is the main routine for subscriber that listens to new request for adding listener, removing
+  listener or receiving incoming source data and distributing among registered/subscribed listeners in thread safe mannet
+*/
 func (broadcaster *Broadcaster) Start() {
   // defer closing listeners
   defer broadcaster.closeListeners()
