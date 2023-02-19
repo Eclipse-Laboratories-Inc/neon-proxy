@@ -7,6 +7,7 @@ import (
   "log"
 
   "github.com/gorilla/websocket"
+  "github.com/neonlabsorg/neon-proxy/pkg/logger"
 )
 
 var upgrader = websocket.Upgrader{
@@ -15,8 +16,8 @@ var upgrader = websocket.Upgrader{
   CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-func NewServer(ctx *context.Context) *Server{
-  return &Server{ctx: ctx}
+func NewServer(ctx *context.Context, log logger.Logger) *Server{
+  return &Server{ctx: ctx, log: log}
 }
 
 type Server struct {
@@ -27,14 +28,20 @@ type Server struct {
 
   //pending transaction broadcaster instance
   pendingTransactionBroadcaster *Broadcaster
+
+  // logger instance
+  log logger.Logger
 }
 
 // upgrade connection to websocket and register the client
 func (server * Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
+  server.log.Info().Msg("new client connection is establishing ... ")
+
   // upgrade this connection to a WebSocket
   conn, err := upgrader.Upgrade(w, r, nil)
   if err != nil {
-  	fmt.Println(err)
+  	server.log.Error().Err(err).Msg("Error on upgrading client connection to ws")
+    return
   }
 
   // create a new client associated with the connection
@@ -55,11 +62,12 @@ func (server *Server) GetNewHeadBroadcaster(solanaWSEndpoint string) (*Broadcast
   go broadcaster.Start()
 
   // register source and sourceError for broadcaster that will we solana endpoint pulling new heads
-  err := RegisterNewHeadBroadcasterSources(server.ctx, solanaWSEndpoint, broadcaster.source, broadcaster.sourceError)
+  err := RegisterNewHeadBroadcasterSources(server.ctx, server.log, solanaWSEndpoint, broadcaster.source, broadcaster.sourceError)
   if err != nil {
     return nil, err
   }
 
+  server.log.Info().Msg("NewHeads broadcaster sources registered")
   return broadcaster, nil
 }
 

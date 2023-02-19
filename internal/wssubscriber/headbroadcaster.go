@@ -9,6 +9,8 @@ import (
   "net/http"
   "io/ioutil"
   "encoding/json"
+
+  "github.com/neonlabsorg/neon-proxy/pkg/logger"
 )
 
 const (
@@ -30,7 +32,9 @@ type BlockHeader struct {
   } `json:"error,omitempty"`
 }
 
-func RegisterNewHeadBroadcasterSources(ctx *context.Context, solanaWebsocketEndpoint string, broadcaster chan interface{}, broadcasterErr chan error) (error){
+func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint string, broadcaster chan interface{}, broadcasterErr chan error) (error){
+  log.Info().Msg("block pulling from rpc started ... ")
+
   // subscribe to every result coming into the channel
   go func() {
     // store latest processed block slot
@@ -44,6 +48,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, solanaWebsocketEndp
       // get latest block number
       slotResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method":"getSlot", "params":[{"commitment":"finalized"}]}`), solanaWebsocketEndpoint, "POST")
       if err != nil {
+        log.Error().Err(err).Msg("Error on rpc call for checking the latest slot on chain")
         broadcasterErr <- err
         continue
       }
@@ -64,17 +69,13 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, solanaWebsocketEndp
       err = json.Unmarshal([]byte(slotResponse), &blockSlot)
     	if err != nil {
         broadcasterErr <- err
+        log.Error().Err(err).Msg("Error on unmarshaling slot response from rpc endpoint")
         continue
     	}
 
       // error from rpc
       if blockSlot.Error.Message != "" {
-        broadcasterErr <- err
-        continue
-      }
-
-      // check unmarshaling error
-      if err != nil {
+        log.Error().Err(err).Msg("Error from rpc endpoint")
         broadcasterErr <- err
         continue
       }
@@ -85,9 +86,11 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, solanaWebsocketEndp
         continue
       }
 
+      log.Info().Msg("processing blocks from " + strconv.FormatUint(latestProcessedBlockSlot, 10) + " to " + strconv.FormatUint(blockSlot.Result, 10))
       err = processBlocks(ctx, solanaWebsocketEndpoint, broadcaster, broadcasterErr, &latestProcessedBlockSlot, blockSlot.Result)
       // check unmarshaling error
       if err != nil {
+        log.Error().Err(err).Msg("Error on processing blocks")
         broadcasterErr <- err
         continue
       }

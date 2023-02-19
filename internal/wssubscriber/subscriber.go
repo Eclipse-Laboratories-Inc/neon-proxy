@@ -38,7 +38,7 @@ func (s *WSSubscriber) Run() error {
 	var err error
 
 	// create server
-	server := NewServer(&s.ctx)
+	server := NewServer(&s.ctx, s.logger)
 
 	// creates a broadcaster already pulling new heads from solana and registers the broadcaster
 	if server.newHeadsBroadcaster, err = server.GetNewHeadBroadcaster(s.cfg.solanaRPCEndpoint); err != nil {
