@@ -37,11 +37,11 @@ func (s *WSSubscriber) Run() error {
 	// for checking registration errors
 	var err error
 
-	// start server
+	// create server
 	server := NewServer(&s.ctx)
 
-	// create and register new heads broadcaster and start pulling new heads
-	if server.newHeadsBroadcaster, err = server.GetNewHeadBroadcaster(s.cfg.solanaWebsocketEndpoint); err != nil {
+	// creates a broadcaster already pulling new heads from solana and registers the broadcaster
+	if server.newHeadsBroadcaster, err = server.GetNewHeadBroadcaster(s.cfg.solanaRPCEndpoint); err != nil {
 		return err
 	}
 

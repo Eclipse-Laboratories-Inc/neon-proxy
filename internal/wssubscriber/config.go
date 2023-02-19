@@ -6,20 +6,20 @@ import (
 )
 
 const (
-    neonSolanaWebsocketEnv = "NEON_WEBSOCKET_ENDPOINT"
+    solanaRPCEndpoint = "SOLANA_RPC_ENDPOINT"
     wssubscriberPort = "NEON_WEBSOCKET_PORT"
 )
 
 type WSSubscriberConfig struct {
-  solanaWebsocketEndpoint string
+  solanaRPCEndpoint string
   wssubscriberPort string
 }
 
 func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
   // check if endpoint is set in env
-  solanaWssEndpoint := os.Getenv(neonSolanaWebsocketEnv)
-  if len(solanaWssEndpoint) == 0 {
-    return nil, errors.New(neonSolanaWebsocketEnv + " env variable not set")
+  endpoint := os.Getenv(solanaRPCEndpoint)
+  if len(endpoint) == 0 {
+    return nil, errors.New(solanaRPCEndpoint + " env variable not set")
   }
 
   // check if port is set in env
@@ -29,7 +29,7 @@ func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
   }
 
 	return &WSSubscriberConfig{
-    solanaWebsocketEndpoint: solanaWssEndpoint,
+    solanaRPCEndpoint: endpoint,
     wssubscriberPort: port,
   }, nil
 }

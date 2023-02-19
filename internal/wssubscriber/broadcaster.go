@@ -1,6 +1,7 @@
 package wssubscriber
 
 import (
+  "log"
   "context"
 )
 
@@ -64,7 +65,7 @@ func (broadcaster *Broadcaster) Start() {
   for {
     select {
     // check if server is shut down
-  case <-(*broadcaster.ctx).Done():
+    case <-(*broadcaster.ctx).Done():
         return
 
     // if new listener is added, add as a new channel
@@ -93,6 +94,12 @@ func (broadcaster *Broadcaster) Start() {
             }
           }
         }
+
+    // in case we catch error
+    case err := <-broadcaster.sourceError:
+        //TODO error handing ?
+        log.Println(err)
+        continue;
     }
   }
 }

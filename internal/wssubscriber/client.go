@@ -10,6 +10,7 @@ import (
   "github.com/gorilla/websocket"
 )
 
+// defining each connection parameters
 type Client struct {
   // The websocket connection.
   conn *websocket.Conn
@@ -38,6 +39,16 @@ type Client struct {
   pendingTransactionsSubscriptionID string
 }
 
+// json object sent back to the client
+type ClientResponse struct {
+	Jsonrpc string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  struct {
+		Subscription string `json:"subscription"`
+		Result       json.RawMessage `json:"result"`
+	} `json:"params"`
+}
+
 const (
   // Time allowed to write a message to the peer.
   deadline = 3 * time.Second
@@ -50,6 +61,7 @@ const (
 
   // subscription method
   methodSubscription = "eth_subscribe"
+  methodSubscriptionName = "eth_subscription"
   methodUnsubscription = "eth_unsubscribe"
 
   subscriptionNewHeads = "newHeads"
@@ -287,6 +299,7 @@ func (c *Client) subscribeToNewHeads(requestRPC SubscribeJsonRPC, responseRPC *S
 
   // register subscription id for client
   c.newHeadSubscriptionID = responseRPC.Result
+  c.newHeadsIsActive = true
   go c.CollectNewHeads()
 }
 
@@ -307,9 +320,16 @@ func (c *Client) CollectNewHeads() {
         }
         c.cMu.Unlock()
 
-        // encode new head and push it into send buffer
-        jsonNewHead, _ := json.Marshal(newHead)
-        c.clientResponseBuffer <- jsonNewHead
+        // construct response object for new event
+        var clientResponse ClientResponse
+        clientResponse.Jsonrpc = rpcVersion
+        clientResponse.Method = methodSubscriptionName
+        clientResponse.Params.Subscription = c.newHeadSubscriptionID
+        clientResponse.Params.Result = newHead.([]byte)
+
+        // marshal to send it as a json
+        response, _ := json.Marshal(clientResponse)
+        c.clientResponseBuffer <- response
       }
   }
 }

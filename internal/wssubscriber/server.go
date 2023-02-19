@@ -51,14 +51,14 @@ func (server *Server) GetNewHeadBroadcaster(solanaWSEndpoint string) (*Broadcast
   // create a new broadcaster
   broadcaster := NewBroadcaster(server.ctx)
 
+  // start broadcasting incoming new heads to subscribers
+  go broadcaster.Start()
+
   // register source and sourceError for broadcaster that will we solana endpoint pulling new heads
   err := RegisterNewHeadBroadcasterSources(server.ctx, solanaWSEndpoint, broadcaster.source, broadcaster.sourceError)
   if err != nil {
     return nil, err
   }
-
-  // start broadcasting incoming new heads to subscribers
-  go broadcaster.Start()
 
   return broadcaster, nil
 }
