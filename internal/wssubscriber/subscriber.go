@@ -3,6 +3,8 @@ package wssubscriber
 import (
 	"context"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/config"
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/server"
 )
 
 const (
@@ -14,14 +16,14 @@ type Transaction struct {
 }
 
 type WSSubscriber struct {
-	cfg             *WSSubscriberConfig
+	cfg             *config.WSSubscriberConfig
 	ctx             context.Context
 	logger          logger.Logger
 	subscriberError chan error
 }
 
 func NewWSSubscriber(
-	cfg *WSSubscriberConfig,
+	cfg *config.WSSubscriberConfig,
 	ctx context.Context,
 	log logger.Logger,
 ) *WSSubscriber {
@@ -38,20 +40,20 @@ func (s *WSSubscriber) Run() error {
 	var err error
 
 	// create server
-	server := NewServer(&s.ctx, s.logger)
+	server := server.NewServer(&s.ctx, s.logger)
 
 	// creates a broadcaster already pulling new heads from solana and registers the broadcaster
-	if server.newHeadsBroadcaster, err = server.GetNewHeadBroadcaster(s.cfg.solanaRPCEndpoint); err != nil {
+	if err = server.StartNewHeadBroadcaster(s.cfg.SolanaRPCEndpoint); err != nil {
 		return err
 	}
 
 	// creates a broadcaster already pulling pending transactions from mempool
-	if server.pendingTransactionBroadcaster, err = server.GetPendingTransactionBroadcaster(s.cfg.solanaRPCEndpoint); err != nil {
+	if err = server.StartPendingTransactionBroadcaster(); err != nil {
 		return err
 	}
 
 	// start ws server for incoming subscriptions
-	go server.StartServer(s.cfg.wssubscriberPort)
+	go server.StartServer(s.cfg.WssubscriberPort)
 
 	return nil
 }

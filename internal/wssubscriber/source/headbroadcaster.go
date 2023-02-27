@@ -1,4 +1,4 @@
-package wssubscriber
+package source
 
 import (
   "time"
@@ -11,6 +11,7 @@ import (
   "encoding/json"
 
   "github.com/neonlabsorg/neon-proxy/pkg/logger"
+  "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 )
 
 const (
@@ -33,8 +34,15 @@ type BlockHeader struct {
 }
 
 // RegisterNewHeadBroadcasterSources passes data and error channels where new incoming data (block heads) will be pushed and redirected to broadcaster
-func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint string, broadcaster chan interface{}, broadcasterErr chan error) (error){
+func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint string, broadcaster *broadcaster.Broadcaster) (error){
   log.Info().Msg("block pulling from rpc started ... ")
+
+  // declare sources to be set
+  source := make(chan interface{})
+  sourceError := make(chan error)
+
+  // register given sources
+  broadcaster.SetSources(source, sourceError)
 
   // subscribe to every result coming into the channel
   go func() {
@@ -50,7 +58,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
       slotResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method":"getSlot", "params":[{"commitment":"finalized"}]}`), solanaWebsocketEndpoint, "POST")
       if err != nil {
         log.Error().Err(err).Msg("Error on rpc call for checking the latest slot on chain")
-        broadcasterErr <- err
+        sourceError <- err
         continue
       }
 
@@ -69,7 +77,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
       // unrmarshal latest block slot
       err = json.Unmarshal([]byte(slotResponse), &blockSlot)
     	if err != nil {
-        broadcasterErr <- err
+        sourceError <- err
         log.Error().Err(err).Msg("Error on unmarshaling slot response from rpc endpoint")
         continue
     	}
@@ -77,7 +85,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
       // error from rpc
       if blockSlot.Error.Message != "" {
         log.Error().Err(err).Msg("Error from rpc endpoint")
-        broadcasterErr <- err
+        sourceError <- err
         continue
       }
 
@@ -88,11 +96,11 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
       }
 
       log.Info().Msg("processing blocks from " + strconv.FormatUint(latestProcessedBlockSlot, 10) + " to " + strconv.FormatUint(blockSlot.Result, 10))
-      err = processBlocks(ctx, solanaWebsocketEndpoint, log, broadcaster, broadcasterErr, &latestProcessedBlockSlot, blockSlot.Result)
+      err = processBlocks(ctx, solanaWebsocketEndpoint, log, source, sourceError, &latestProcessedBlockSlot, blockSlot.Result)
       // check unmarshaling error
       if err != nil {
         log.Error().Err(err).Msg("Error on processing blocks")
-        broadcasterErr <- err
+        sourceError <- err
         continue
       }
     }

@@ -1,4 +1,4 @@
-package wssubscriber
+package broadcaster
 
 import (
   "context"
@@ -33,6 +33,12 @@ func NewBroadcaster(ctx *context.Context, log logger.Logger) *Broadcaster {
     addListener:    make(chan (chan interface{})),
     removeListener: make(chan (<-chan interface{})),
 	}
+}
+
+// sets external sources for incoming data
+func (broadcaster *Broadcaster) SetSources(source chan interface{}, sourceErr chan error) {
+  broadcaster.source = source
+  broadcaster.sourceError = sourceErr
 }
 
 // subscribing to the broadcaster

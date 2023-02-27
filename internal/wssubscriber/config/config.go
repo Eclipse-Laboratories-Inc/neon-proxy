@@ -1,4 +1,4 @@
-package wssubscriber
+package config
 
 import (
   "os"
@@ -11,8 +11,8 @@ const (
 )
 
 type WSSubscriberConfig struct {
-  solanaRPCEndpoint string
-  wssubscriberPort string
+  SolanaRPCEndpoint string
+  WssubscriberPort string
 }
 
 func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
@@ -29,22 +29,7 @@ func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
   }
 
 	return &WSSubscriberConfig{
-    solanaRPCEndpoint: endpoint,
-    wssubscriberPort: port,
+    SolanaRPCEndpoint: endpoint,
+    WssubscriberPort: port,
   }, nil
 }
-
-var headSubscribe = `{
-  "jsonrpc": "2.0",
-  "id": "1",
-  "method": "blockSubscribe",
-  "params": [
-    "all",
-    {
-      "commitment": "confirmed",
-      "encoding": "jsonParsed",
-      "showRewards": false,
-      "transactionDetails": "signatures"
-    }
-  ]
-}`

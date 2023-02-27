@@ -2,30 +2,24 @@ package main
 
 import (
 	"fmt"
-	"runtime"
-	"time"
 
 	"github.com/neonlabsorg/neon-proxy/pkg/service"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber"
+	wsconfig "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/config"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
 )
 
 func main() {
-	fmt.Println(runtime.NumGoroutine())
-	time.Sleep(time.Second * 3)
-	fmt.Println(runtime.NumGoroutine())
 	s := service.CreateService(&configuration.Config{
 		Name: "wssubscriber",
-		// Storage: &configuration.ConfigStorageList{},
 	})
 
 	s.AddHandler(runWSSubscriberProxy)
-
 	s.Run()
 }
 
 func runWSSubscriberProxy(s *service.Service) {
-	cfg, err := wssubscriber.CreateConfigFromEnv()
+	cfg, err := wsconfig.CreateConfigFromEnv()
 	if err != nil {
 		panic(err)
 	}

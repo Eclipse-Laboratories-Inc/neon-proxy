@@ -1,4 +1,4 @@
-package wssubscriber
+package utils
 
 import (
 	"bufio"

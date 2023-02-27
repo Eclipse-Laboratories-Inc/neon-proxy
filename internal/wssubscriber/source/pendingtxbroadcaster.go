@@ -1,15 +1,23 @@
-package wssubscriber
+package source
 
 import (
   "time"
   "context"
 
   "github.com/neonlabsorg/neon-proxy/pkg/logger"
+  "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 )
 
 // RegisterNewHeadBroadcasterSources passes data and error channels where new incoming data (block heads) will be pushed and redirected to broadcaster
-func RegisterPendingTransactionBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint string, broadcaster chan interface{}, broadcasterErr chan error) (error){
+func RegisterPendingTransactionBroadcasterSources(ctx *context.Context, log logger.Logger, broadcaster *broadcaster.Broadcaster) (error){
   log.Info().Msg("pending transaction pulling from mempool started ... ")
+
+  // declare sources to be set
+  source := make(chan interface{})
+  sourceError := make(chan error)
+
+  // register given sources
+  broadcaster.SetSources(source, sourceError)
 
   var fakemempool = [...]string {"3vCdSdwwzRgasgrj17Wc4PzMUwzujcen1W432Qe9wm2fFnqz1jQbm92cVgLnsaE7vtgSb1CCiCPWyhac5sJgkyNY",
     "3asEtuKPUKKCpvHWxatGxXzWGyJZauQu1Gb2Z8goMvem8UE62phiTs7P3sRxfvCWiijmCtcsytayFeNbAmaHDDrz",
@@ -23,7 +31,7 @@ func RegisterPendingTransactionBroadcasterSources(ctx *context.Context, log logg
       // Calling Sleep method
       time.Sleep(1 * time.Second)
 
-      broadcaster <- fakemempool[k%4]
+      source <- fakemempool[k%4]
     }
   }()
 

@@ -1,15 +1,14 @@
-package wssubscriber
+package server
 
 import (
   "context"
   "net/http"
-  "time"
   "fmt"
-  "log"
-  "runtime"
 
   "github.com/gorilla/websocket"
   "github.com/neonlabsorg/neon-proxy/pkg/logger"
+  "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/source"
+  "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 )
 
 var upgrader = websocket.Upgrader{
@@ -26,10 +25,10 @@ type Server struct {
   ctx *context.Context
 
   // head broadcaster instance
-  newHeadsBroadcaster *Broadcaster
+  newHeadsBroadcaster *broadcaster.Broadcaster
 
   //pending transaction broadcaster instance
-  pendingTransactionBroadcaster *Broadcaster
+  pendingTransactionBroadcaster *broadcaster.Broadcaster
 
   // logger instance
   log logger.Logger
@@ -56,49 +55,47 @@ func (server * Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
 	go client.WritePump()
 }
 
-func (server *Server) GetNewHeadBroadcaster(solanaWSEndpoint string) (*Broadcaster, error) {
+func (server *Server) StartNewHeadBroadcaster(solanaWSEndpoint string) error {
   // create a new broadcaster
-  broadcaster := NewBroadcaster(server.ctx, server.log)
+  broadcaster := broadcaster.NewBroadcaster(server.ctx, server.log)
 
   // start broadcasting incoming new heads to subscribers
   go broadcaster.Start()
 
   // register source and sourceError for broadcaster that will we solana endpoint pulling new heads
-  err := RegisterNewHeadBroadcasterSources(server.ctx, server.log, solanaWSEndpoint, broadcaster.source, broadcaster.sourceError)
+  err := source.RegisterNewHeadBroadcasterSources(server.ctx, server.log, solanaWSEndpoint, broadcaster)
   if err != nil {
-    return nil, err
+    return err
   }
 
-  server.log.Info().Msg("NewHeads broadcaster sources registered")
-  return broadcaster, nil
+  // register head broadcaster in server
+  server.newHeadsBroadcaster = broadcaster
+
+  server.log.Info().Msg("newHeads broadcaster sources registered")
+  return nil
 }
 
-func (server *Server) GetPendingTransactionBroadcaster(solanaWSEndpoint string) (*Broadcaster, error) {
+func (server *Server) StartPendingTransactionBroadcaster() error {
   // create a new broadcaster
-  broadcaster := NewBroadcaster(server.ctx, server.log)
+  broadcaster := broadcaster.NewBroadcaster(server.ctx, server.log)
 
   // start broadcasting incoming new heads to subscribers
   go broadcaster.Start()
 
   // register source and sourceError for broadcaster that will we solana endpoint pulling new heads
-  err := RegisterPendingTransactionBroadcasterSources(server.ctx, server.log, solanaWSEndpoint, broadcaster.source, broadcaster.sourceError)
+  err := source.RegisterPendingTransactionBroadcasterSources(server.ctx, server.log, broadcaster)
   if err != nil {
-    return nil, err
+    return err
   }
 
-  server.log.Info().Msg("NewHeads broadcaster sources registered")
-  return broadcaster, nil
+  // register pendingTransaction broadcaster
+  server.pendingTransactionBroadcaster = broadcaster
+  server.log.Info().Msg("pendingTransaction broadcaster sources registered")
+  return nil
 }
 
 // start listening to incoming subscription connections
 func (server * Server) StartServer(port string) {
-  go func() {
-    for {
-    time.Sleep(time.Second * 2)
-    fmt.Println(runtime.NumGoroutine())
-  }
-  }()
   http.HandleFunc("/", server.wsEndpoint)
-  log.Println("starting on ", port)
   fmt.Println(http.ListenAndServe(":" + port, nil))
 }

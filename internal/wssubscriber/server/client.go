@@ -1,9 +1,8 @@
-package wssubscriber
+package server
 
 import (
-  "log"
-  "time"
   "fmt"
+  "time"
   "sync"
   "bytes"
   "reflect"
@@ -11,6 +10,8 @@ import (
 
   "github.com/gorilla/websocket"
   "github.com/neonlabsorg/neon-proxy/pkg/logger"
+  "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
+  "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 )
 
 // defining each connection parameters
@@ -28,14 +29,14 @@ type Client struct {
   closeOnlyOnce sync.Once
 
   // head broadcaster instance
-  newHeadsBroadcaster *Broadcaster
+  newHeadsBroadcaster *broadcaster.Broadcaster
   newHeadsSource chan interface{}
   newHeadsLocker sync.Mutex
   newHeadsIsActive bool
   newHeadSubscriptionID string
 
   //pending transaction broadcaster instance
-  pendingTransactionsBroadcaster *Broadcaster
+  pendingTransactionsBroadcaster *broadcaster.Broadcaster
   pendingTransactionsSource chan interface{}
   pendingTransactionsLocker sync.Mutex
   pendingTransactionsIsActive bool
@@ -98,7 +99,7 @@ type Event struct {
 }
 
 // create new client when connecting
-func NewClient(conn *websocket.Conn, log logger.Logger, headBroadcaster *Broadcaster, pendingTxBroadcaster *Broadcaster) *Client {
+func NewClient(conn *websocket.Conn, log logger.Logger, headBroadcaster *broadcaster.Broadcaster, pendingTxBroadcaster *broadcaster.Broadcaster) *Client {
   return &Client{conn: conn, log: log, clientResponseBuffer: make(chan []byte, 256), newHeadsBroadcaster: headBroadcaster, pendingTransactionsBroadcaster: pendingTxBroadcaster}
 }
 
@@ -117,7 +118,7 @@ func (c *Client) ReadPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
+        c.log.Error().Err(err).Msg(fmt.Sprintf("error: %v", err))
 			}
       c.Close()
 			break
@@ -294,7 +295,7 @@ func (c *Client) subscribeNewPendingTransactions(requestRPC SubscribeJsonRPC, re
   c.pendingTransactionsSource = c.pendingTransactionsBroadcaster.Subscribe()
 
   // generate subscription id
-  responseRPC.Result = NewID()
+  responseRPC.Result = utils.NewID()
   responseRPC.ID = requestRPC.ID
 
   // register subscription id for client
@@ -348,9 +349,9 @@ func (c *Client) subscribeToNewHeads(requestRPC SubscribeJsonRPC, responseRPC *S
 
   // if not subscribe to broadcaster
   c.newHeadsSource = c.newHeadsBroadcaster.Subscribe()
-  fmt.Println(c.newHeadsSource)
+
   // generate subscription id
-  responseRPC.Result = NewID()
+  responseRPC.Result = utils.NewID()
   responseRPC.ID = requestRPC.ID
 
   // register subscription id for client
