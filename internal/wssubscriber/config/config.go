@@ -10,11 +10,13 @@ const (
     wssubscriberPort = "NEON_WEBSOCKET_PORT"
 )
 
+// declare wssubscriber configuration parameters
 type WSSubscriberConfig struct {
   SolanaRPCEndpoint string
   WssubscriberPort string
 }
 
+// validate and return env variable
 func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
   // check if endpoint is set in env
   endpoint := os.Getenv(solanaRPCEndpoint)

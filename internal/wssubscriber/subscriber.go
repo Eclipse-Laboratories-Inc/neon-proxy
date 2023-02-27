@@ -36,19 +36,16 @@ func NewWSSubscriber(
 }
 
 func (s *WSSubscriber) Run() error {
-	// for checking registration errors
-	var err error
-
 	// create server
 	server := server.NewServer(&s.ctx, s.logger)
 
 	// creates a broadcaster already pulling new heads from solana and registers the broadcaster
-	if err = server.StartNewHeadBroadcaster(s.cfg.SolanaRPCEndpoint); err != nil {
+	if err := server.StartNewHeadBroadcaster(s.cfg.SolanaRPCEndpoint); err != nil {
 		return err
 	}
 
 	// creates a broadcaster already pulling pending transactions from mempool
-	if err = server.StartPendingTransactionBroadcaster(); err != nil {
+	if err := server.StartPendingTransactionBroadcaster(); err != nil {
 		return err
 	}
 

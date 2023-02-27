@@ -14,6 +14,7 @@ import (
   "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 )
 
+// error code is returned when specific slot is skipped, we check this and jump over skipped blocks during process
 const (
   slotWasSkippedErrorCode = -32007
 )
@@ -95,10 +96,9 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
         continue
       }
 
+      // process the blocks in given interval
       log.Info().Msg("processing blocks from " + strconv.FormatUint(latestProcessedBlockSlot, 10) + " to " + strconv.FormatUint(blockSlot.Result, 10))
-      err = processBlocks(ctx, solanaWebsocketEndpoint, log, source, sourceError, &latestProcessedBlockSlot, blockSlot.Result)
-      // check unmarshaling error
-      if err != nil {
+      if err := processBlocks(ctx, solanaWebsocketEndpoint, log, source, sourceError, &latestProcessedBlockSlot, blockSlot.Result); err != nil {
         log.Error().Err(err).Msg("Error on processing blocks")
         sourceError <- err
         continue

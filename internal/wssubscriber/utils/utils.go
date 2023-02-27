@@ -25,8 +25,7 @@ func idGenerator() *rand.Rand {
 	return rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 }
 
-// NewID generates a identifier that can be used as an identifier in the RPC interface.
-// e.g. filter and subscription identifier.
+// NewID generates a identifier that can be used as an identifier in the RPC interface as a subscription ID
 func NewID() string {
 	subscriptionIDGenMu.Lock()
 	defer subscriptionIDGenMu.Unlock()

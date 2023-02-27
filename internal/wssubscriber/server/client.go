@@ -127,7 +127,7 @@ func (c *Client) ReadPump() {
     // process request
 		response := c.ProcessRequest(bytes.TrimSpace(bytes.Replace(message, []byte{'\n'}, []byte{' '}, -1)));
     res, _ := json.Marshal(response)
-    c.sendMessage(res)
+    c.clientResponseBuffer <- res
 	}
 }
 
@@ -219,26 +219,6 @@ func (c *Client) WritePump() {
 		}
 	}
 }
-
-// send message back to subscriber
-func (c *Client) sendMessage(message []byte) {
-  c.conn.SetWriteDeadline(time.Now().Add(deadline))
-
-  // create new writer
-  w, err := c.conn.NextWriter(websocket.TextMessage)
-  if err != nil {
-    return
-  }
-
-  // send next data chunk
-  w.Write(message)
-
-  // close current writer
-  if err := w.Close(); err != nil {
-    return
-  }
-}
-
 
 func (c *Client) unsubscribe(requestRPC SubscribeJsonRPC, responseRPC *SubscribeJsonResponseRCP) {
   // get subscription id to cancel subscription
@@ -366,7 +346,6 @@ func (c *Client) CollectNewHeads() {
   for  {
       select {
       case newHead, ok := <- c.newHeadsSource:
-        c.log.Info().Msg("new head to be subscribed")
         //channel has been closed
         if ok == false {
           return
@@ -393,6 +372,7 @@ func (c *Client) CollectNewHeads() {
   }
 }
 
+// closing client connection unsubscribes everything and closes connection, cancelling subscription is safe even if we hadn't subscribed
 func (c *Client) Close() {
   c.closeOnlyOnce.Do(func() {
     c.conn.Close()
