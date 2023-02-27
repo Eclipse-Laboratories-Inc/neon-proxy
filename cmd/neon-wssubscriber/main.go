@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"runtime"
+	"time"
 
 	"github.com/neonlabsorg/neon-proxy/pkg/service"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber"
@@ -9,6 +11,9 @@ import (
 )
 
 func main() {
+	fmt.Println(runtime.NumGoroutine())
+	time.Sleep(time.Second * 3)
+	fmt.Println(runtime.NumGoroutine())
 	s := service.CreateService(&configuration.Config{
 		Name: "wssubscriber",
 		// Storage: &configuration.ConfigStorageList{},

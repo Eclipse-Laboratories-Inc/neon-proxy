@@ -1,8 +1,9 @@
 package wssubscriber
 
 import (
-  "log"
   "context"
+
+  "github.com/neonlabsorg/neon-proxy/pkg/logger"
 )
 
 /*
@@ -18,12 +19,14 @@ type Broadcaster struct {
   addListener chan chan interface{}
   removeListener chan (<-chan interface{})
   start func()
+  log logger.Logger
 }
 
 // create initial server structure with source nil
-func NewBroadcaster(ctx *context.Context) *Broadcaster {
+func NewBroadcaster(ctx *context.Context, log logger.Logger) *Broadcaster {
   return &Broadcaster{
     ctx:            ctx,
+    log:            log,
     source:         make(chan interface{}),
     sourceError:    make(chan error),
     listeners:      make([]chan interface{}, 0),
@@ -97,8 +100,7 @@ func (broadcaster *Broadcaster) Start() {
 
     // in case we catch error
     case err := <-broadcaster.sourceError:
-        //TODO error handing ?
-        log.Println(err)
+        broadcaster.log.Error().Err(err).Msg("Error on subscriber process")
         continue;
     }
   }

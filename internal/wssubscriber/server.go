@@ -3,8 +3,10 @@ package wssubscriber
 import (
   "context"
   "net/http"
+  "time"
   "fmt"
   "log"
+  "runtime"
 
   "github.com/gorilla/websocket"
   "github.com/neonlabsorg/neon-proxy/pkg/logger"
@@ -45,7 +47,7 @@ func (server * Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
   }
 
   // create a new client associated with the connection
-  client := NewClient(conn, server.newHeadsBroadcaster, server.pendingTransactionBroadcaster)
+  client := NewClient(conn, server.log, server.newHeadsBroadcaster, server.pendingTransactionBroadcaster)
 
 	// listen for incoming subscriptions.
 	go client.ReadPump()
@@ -56,7 +58,7 @@ func (server * Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
 
 func (server *Server) GetNewHeadBroadcaster(solanaWSEndpoint string) (*Broadcaster, error) {
   // create a new broadcaster
-  broadcaster := NewBroadcaster(server.ctx)
+  broadcaster := NewBroadcaster(server.ctx, server.log)
 
   // start broadcasting incoming new heads to subscribers
   go broadcaster.Start()
@@ -71,8 +73,31 @@ func (server *Server) GetNewHeadBroadcaster(solanaWSEndpoint string) (*Broadcast
   return broadcaster, nil
 }
 
+func (server *Server) GetPendingTransactionBroadcaster(solanaWSEndpoint string) (*Broadcaster, error) {
+  // create a new broadcaster
+  broadcaster := NewBroadcaster(server.ctx, server.log)
+
+  // start broadcasting incoming new heads to subscribers
+  go broadcaster.Start()
+
+  // register source and sourceError for broadcaster that will we solana endpoint pulling new heads
+  err := RegisterPendingTransactionBroadcasterSources(server.ctx, server.log, solanaWSEndpoint, broadcaster.source, broadcaster.sourceError)
+  if err != nil {
+    return nil, err
+  }
+
+  server.log.Info().Msg("NewHeads broadcaster sources registered")
+  return broadcaster, nil
+}
+
 // start listening to incoming subscription connections
 func (server * Server) StartServer(port string) {
+  go func() {
+    for {
+    time.Sleep(time.Second * 2)
+    fmt.Println(runtime.NumGoroutine())
+  }
+  }()
   http.HandleFunc("/", server.wsEndpoint)
   log.Println("starting on ", port)
   fmt.Println(http.ListenAndServe(":" + port, nil))

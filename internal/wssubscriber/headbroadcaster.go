@@ -32,6 +32,7 @@ type BlockHeader struct {
   } `json:"error,omitempty"`
 }
 
+// RegisterNewHeadBroadcasterSources passes data and error channels where new incoming data (block heads) will be pushed and redirected to broadcaster
 func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint string, broadcaster chan interface{}, broadcasterErr chan error) (error){
   log.Info().Msg("block pulling from rpc started ... ")
 
@@ -87,7 +88,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
       }
 
       log.Info().Msg("processing blocks from " + strconv.FormatUint(latestProcessedBlockSlot, 10) + " to " + strconv.FormatUint(blockSlot.Result, 10))
-      err = processBlocks(ctx, solanaWebsocketEndpoint, broadcaster, broadcasterErr, &latestProcessedBlockSlot, blockSlot.Result)
+      err = processBlocks(ctx, solanaWebsocketEndpoint, log, broadcaster, broadcasterErr, &latestProcessedBlockSlot, blockSlot.Result)
       // check unmarshaling error
       if err != nil {
         log.Error().Err(err).Msg("Error on processing blocks")
@@ -101,7 +102,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
 }
 
 // request each block from "from" to "to" from the rpc endpoint and broadcast to user
-func processBlocks(ctx *context.Context, solanaWebsocketEndpoint string, broadcaster chan interface{}, broadcasterErr chan error, from *uint64, to uint64) error {
+func processBlocks(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, broadcaster chan interface{}, broadcasterErr chan error, from *uint64, to uint64) error {
   // process each block sequentially, broadcasting to peers
   for  *from < to {
     // get block with given slot

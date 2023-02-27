@@ -45,8 +45,10 @@ func (s *WSSubscriber) Run() error {
 		return err
 	}
 
-	// create and register new pending transaction broadcaster and start pulling new transactions
-	//go server.RegisterNewPendingTransactionBroadcaster(NewPendingTransactionBroadcaster(s.cfg.solanaWebsocketEndpoint)).Start()
+	// creates a broadcaster already pulling pending transactions from mempool
+	if server.pendingTransactionBroadcaster, err = server.GetPendingTransactionBroadcaster(s.cfg.solanaRPCEndpoint); err != nil {
+		return err
+	}
 
 	// start ws server for incoming subscriptions
 	go server.StartServer(s.cfg.wssubscriberPort)
