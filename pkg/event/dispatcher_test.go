@@ -65,9 +65,9 @@ func TestDispatcherMultyHandlersWithPriority(t *testing.T) {
 
 	// check if Handlers are called by priority
 	handlerNames := []string{
-		"ABCD-handler -100", "ABCD-handler -100", "ABCD-handler -20", "ABCD-handler 0",
-		"ABCD-handler 15", "ABCD-handler 30", "ABCD-handler 80", "ABCD-handler 100",
-		"ABCD-handler 100",
+		"ABCD-handler 100", "ABCD-handler 100", "ABCD-handler 80", "ABCD-handler 30",
+		"ABCD-handler 15", "ABCD-handler 0", "ABCD-handler -20", "ABCD-handler -100",
+		"ABCD-handler -100",
 	}
 	assert.Equal(t, handlerNames, processedTestHandlers)
 }

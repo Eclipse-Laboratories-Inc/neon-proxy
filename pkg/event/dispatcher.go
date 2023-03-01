@@ -26,7 +26,7 @@ type SortedHandlers []HandlerData
 
 func (s SortedHandlers) Insert(handler Handler, priority int) SortedHandlers {
 	// find the handlers position in sorted Handlers
-	i := sort.Search(len(s), func(i int) bool { return s[i].priority >= priority })
+	i := sort.Search(len(s), func(i int) bool { return s[i].priority <= priority })
 	if i == len(s) {
 		return append(s, HandlerData{handler, priority})
 	}
