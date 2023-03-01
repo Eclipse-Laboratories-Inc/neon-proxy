@@ -9,6 +9,7 @@ type DispatcherInterface interface {
 	Register(handler Handler, event Event, priority int)
 	UnRegister(event Event)
 	Notify(event Event)
+	MustTrigger(event Event) // panic on error
 }
 
 // some priority constants
@@ -61,19 +62,33 @@ func (d *Dispatcher) UnRegister(event Event) {
 }
 
 func (d *Dispatcher) Notify(event Event) {
+	panicOnError := false
+	d.notify(event, panicOnError)
+}
+
+func (d *Dispatcher) MustTrigger(event Event) {
+	panicOnError := true
+	d.notify(event, panicOnError)
+}
+
+func (d *Dispatcher) notify(event Event, panicOnError bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	if event.IsAsynchronous() {
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		go d.notifyEvent(event)
+		go d.notifyEvent(event, panicOnError)
 	} else {
-		d.notifyEvent(event)
+		d.notifyEvent(event, panicOnError)
 	}
 }
 
-func (d *Dispatcher) notifyEvent(event Event) {
+func (d *Dispatcher) notifyEvent(event Event, panicOnError bool) {
 	name := event.Name()
 	for _, hd := range d.handlers[name] {
-		hd.handler.Handle(event)
+		err := hd.handler.Handle(event)
+		if panicOnError && err != nil {
+			panic(err)
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package event
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -26,17 +27,9 @@ type TestHandler struct {
 	name string
 }
 
-func (h TestHandler) Handle(event Event) {
+func (h TestHandler) Handle(event Event) error {
 	processedTestHandlers = append(processedTestHandlers, h.name)
-}
-
-// handler function
-type TestHandlerFunc func(e Event)
-
-// Handle event. implements the Handler interface
-func (fn TestHandlerFunc) Handle(e Event) {
-	fn(e)
-	return
+	return nil
 }
 
 func TestDispatcherOneHandler(t *testing.T) {
@@ -49,7 +42,25 @@ func TestDispatcherOneHandler(t *testing.T) {
 		name: "ABCD-Handler",
 	}
 	d.Register(h, ev, High)
+
 	d.Notify(ev)
+	assert.Equal(t, "ABCD-event", ev.Name())
+	assert.Len(t, processedTestHandlers, 1)
+	assert.Equal(t, processedTestHandlers[0], "ABCD-Handler")
+}
+
+func TestDispatcherOneHandlerMustTriggerWithoutError(t *testing.T) {
+	processedTestHandlers = nil
+	d := NewDispatcher()
+	ev := TestEvent{
+		name: "ABCD-event",
+	}
+	h := TestHandler{
+		name: "ABCD-Handler",
+	}
+	d.Register(h, ev, High)
+
+	d.MustTrigger(ev)
 	assert.Equal(t, "ABCD-event", ev.Name())
 	assert.Len(t, processedTestHandlers, 1)
 	assert.Equal(t, processedTestHandlers[0], "ABCD-Handler")
@@ -82,11 +93,21 @@ func TestDispatcherMultyHandlersWithPriority(t *testing.T) {
 	assert.Equal(t, handlerNames, processedTestHandlers)
 }
 
-func testHandlerFunc1(e Event) {
-	processedTestHandlers = append(processedTestHandlers, "testHandlerFunc1")
+// handler function
+type TestHandlerFunc func(e Event) error
+
+// Handle event. implements the Handler interface
+func (fn TestHandlerFunc) Handle(e Event) error {
+	return fn(e)
 }
-func testHandlerFunc2(e Event) {
+
+func testHandlerFunc1(e Event) error {
+	processedTestHandlers = append(processedTestHandlers, "testHandlerFunc1")
+	return nil
+}
+func testHandlerFunc2(e Event) error {
 	processedTestHandlers = append(processedTestHandlers, "testHandlerFunc2")
+	return nil
 }
 
 func TestDispatcherHandlerFuncWithPriority(t *testing.T) {
@@ -158,4 +179,28 @@ func TestDispatcherAsyncEvent(t *testing.T) {
 		"ABCD-handler-async -100", "ABCD-handler-async -100",
 	}
 	assert.Equal(t, handlerNames, processedTestHandlers)
+}
+
+func testHandlerFuncError(e Event) error {
+	processedTestHandlers = append(processedTestHandlers, "testHandlerFuncError")
+	return errors.New("Something Wrong")
+}
+
+func TestDispatcherMustTriggerWithError(t *testing.T) {
+	processedTestHandlers = nil
+	d := NewDispatcher()
+	ev := TestEvent{
+		name: "ABCD-event",
+	}
+
+	ferr := TestHandlerFunc(testHandlerFuncError)
+	d.Register(ferr, ev, High)
+
+	d.Notify(ev)
+	assert.Equal(t, "ABCD-event", ev.Name())
+	assert.Len(t, processedTestHandlers, 1)
+	assert.Equal(t, processedTestHandlers[0], "testHandlerFuncError")
+
+	// check MustTrigger
+	assert.PanicsWithError(t, "Something Wrong", func() { d.MustTrigger(ev) })
 }
