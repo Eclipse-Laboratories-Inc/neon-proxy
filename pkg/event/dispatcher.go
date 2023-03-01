@@ -44,12 +44,18 @@ type Dispatcher struct {
 }
 
 func (d *Dispatcher) Register(handler Handler, event Event, priority int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	name := event.Name()
 	d.handlers[name] = d.handlers[name].Insert(handler, priority)
 }
 
 // Unsubscribe from all Handler
 func (d *Dispatcher) UnRegister(event Event) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	name := event.Name()
 	delete(d.handlers, name)
 }
