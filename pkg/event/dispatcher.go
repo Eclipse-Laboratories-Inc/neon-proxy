@@ -1,6 +1,9 @@
 package event
 
-import "sort"
+import (
+	"sort"
+	"sync"
+)
 
 type DispatcherInterface interface {
 	Register(handler Handler, event Event, priority int)
@@ -36,6 +39,7 @@ func (s SortedHandlers) Insert(handler Handler, priority int) SortedHandlers {
 }
 
 type Dispatcher struct {
+	mu       sync.Mutex
 	handlers map[string]SortedHandlers
 }
 
@@ -52,6 +56,8 @@ func (d *Dispatcher) UnRegister(event Event) {
 
 func (d *Dispatcher) Notify(event Event) {
 	if event.IsAsynchronous() {
+		d.mu.Lock()
+		defer d.mu.Unlock()
 		go d.notifyEvent(event)
 	} else {
 		d.notifyEvent(event)

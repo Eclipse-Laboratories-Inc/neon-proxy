@@ -3,6 +3,7 @@ package event
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -114,6 +115,47 @@ func TestDispatcherHandlerFuncWithPriority(t *testing.T) {
 	handlerNames := []string{
 		"ABCD-handler 100", "ABCD-handler 20", "testHandlerFunc2", "testHandlerFunc1",
 		"ABCD-handler 0", "ABCD-handler -100",
+	}
+	assert.Equal(t, handlerNames, processedTestHandlers)
+}
+
+type TestEventAsync struct {
+	name string
+}
+
+func (e TestEventAsync) Name() string {
+	return e.name
+}
+
+func (e TestEventAsync) IsAsynchronous() bool {
+	return true
+}
+
+func TestDispatcherAsyncEvent(t *testing.T) {
+	processedTestHandlers = nil
+	d := NewDispatcher()
+	ev := TestEventAsync{
+		name: "ABCD-event-async",
+	}
+	priorities := []int{High, Low, Low, Normal}
+	for _, priority := range priorities {
+		h := TestHandler{
+			name: fmt.Sprintf("ABCD-handler-async %d", priority),
+		}
+		d.Register(h, ev, priority)
+	}
+
+	d.Notify(ev)
+
+	time.Sleep(10 * time.Millisecond)
+
+	assert.Equal(t, "ABCD-event-async", ev.Name())
+	assert.Equal(t, len(processedTestHandlers), len(priorities))
+
+	// check if Handlers are called by priority for async event
+	handlerNames := []string{
+		"ABCD-handler-async 100", "ABCD-handler-async 0",
+		"ABCD-handler-async -100", "ABCD-handler-async -100",
 	}
 	assert.Equal(t, handlerNames, processedTestHandlers)
 }
