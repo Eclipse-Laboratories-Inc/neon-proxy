@@ -29,6 +29,15 @@ func (h TestHandler) Handle(event Event) {
 	processedTestHandlers = append(processedTestHandlers, h.name)
 }
 
+// handler function
+type TestHandlerFunc func(e Event)
+
+// Handle event. implements the Handler interface
+func (fn TestHandlerFunc) Handle(e Event) {
+	fn(e)
+	return
+}
+
 func TestDispatcherOneHandler(t *testing.T) {
 	processedTestHandlers = nil
 	d := NewDispatcher()
@@ -68,6 +77,43 @@ func TestDispatcherMultyHandlersWithPriority(t *testing.T) {
 		"ABCD-handler 100", "ABCD-handler 100", "ABCD-handler 80", "ABCD-handler 30",
 		"ABCD-handler 15", "ABCD-handler 0", "ABCD-handler -20", "ABCD-handler -100",
 		"ABCD-handler -100",
+	}
+	assert.Equal(t, handlerNames, processedTestHandlers)
+}
+
+func testHandlerFunc1(e Event) {
+	processedTestHandlers = append(processedTestHandlers, "testHandlerFunc1")
+}
+func testHandlerFunc2(e Event) {
+	processedTestHandlers = append(processedTestHandlers, "testHandlerFunc2")
+}
+
+func TestDispatcherHandlerFuncWithPriority(t *testing.T) {
+	processedTestHandlers = nil
+	d := NewDispatcher()
+	ev := TestEvent{
+		name: "ABCD-event",
+	}
+	priorities := []int{Normal, Low, 20, High}
+	for _, priority := range priorities {
+		h := TestHandler{
+			name: fmt.Sprintf("ABCD-handler %d", priority),
+		}
+		d.Register(h, ev, priority)
+	}
+	f1 := TestHandlerFunc(testHandlerFunc1)
+	f2 := TestHandlerFunc(testHandlerFunc2)
+	d.Register(f1, ev, 10)
+	d.Register(f2, ev, 15)
+
+	d.Notify(ev)
+	assert.Equal(t, "ABCD-event", ev.Name())
+	assert.Equal(t, len(processedTestHandlers), 2+len(priorities))
+
+	// check if Handlers are called by priority
+	handlerNames := []string{
+		"ABCD-handler 100", "ABCD-handler 20", "testHandlerFunc2", "testHandlerFunc1",
+		"ABCD-handler 0", "ABCD-handler -100",
 	}
 	assert.Equal(t, handlerNames, processedTestHandlers)
 }
