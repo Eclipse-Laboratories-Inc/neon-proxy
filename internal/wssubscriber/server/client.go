@@ -10,8 +10,27 @@ import (
 
   "github.com/gorilla/websocket"
   "github.com/neonlabsorg/neon-proxy/pkg/logger"
-  "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
   "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
+)
+
+const (
+  // Time allowed to write a message to the peer.
+  deadline = 3 * time.Second
+
+  // Maximum message size allowed from peer.
+  maxMessageSize = 4096
+
+  // rpc version
+  rpcVersion = "2.0"
+
+  // subscription method
+  methodSubscription = "eth_subscribe"
+  methodSubscriptionName = "eth_subscription"
+  methodUnsubscription = "eth_unsubscribe"
+
+  subscriptionNewHeads = "newHeads"
+  subscriptionLogs = "logs"
+  subscriptionNewPendingTransactions = "newPendingTransactions"
 )
 
 // defining each connection parameters
@@ -52,26 +71,6 @@ type ClientResponse struct {
 		Result       json.RawMessage `json:"result"`
 	} `json:"params"`
 }
-
-const (
-  // Time allowed to write a message to the peer.
-  deadline = 3 * time.Second
-
-  // Maximum message size allowed from peer.
-  maxMessageSize = 4096
-
-  // rpc version
-  rpcVersion = "2.0"
-
-  // subscription method
-  methodSubscription = "eth_subscribe"
-  methodSubscriptionName = "eth_subscription"
-  methodUnsubscription = "eth_unsubscribe"
-
-  subscriptionNewHeads = "newHeads"
-  subscriptionLogs = "logs"
-  subscriptionNewPendingTransactions = "newPendingTransactions"
-)
 
 // subscription request
 type SubscribeJsonRPC struct {
@@ -177,9 +176,9 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
   case requestRPC.Params[0].(string) == subscriptionNewHeads:
       c.subscribeToNewHeads(requestRPC, &responseRPC)
   case requestRPC.Params[0].(string) == subscriptionLogs:
-      c.subscribeNewLogs(requestRPC, &responseRPC)
+      c.subscribeToNewLogs(requestRPC, &responseRPC)
   case requestRPC.Params[0].(string) == subscriptionNewPendingTransactions:
-      c.subscribeNewPendingTransactions(requestRPC, &responseRPC)
+      c.subscribeToNewPendingTransactions(requestRPC, &responseRPC)
   default:
       responseRPC.Error = "subscription type not found"
       return
@@ -256,121 +255,8 @@ func (c *Client) unsubscribe(requestRPC SubscribeJsonRPC, responseRPC *Subscribe
   return
 }
 
-func (c *Client) subscribeNewLogs(requestRPC SubscribeJsonRPC, responseRPC *SubscribeJsonResponseRCP) {
-
-}
-
-func (c *Client) subscribeNewPendingTransactions(requestRPC SubscribeJsonRPC, responseRPC *SubscribeJsonResponseRCP) {
-  // if new head subscription is active skip another subscription
-  c.pendingTransactionsLocker.Lock()
-  defer c.pendingTransactionsLocker.Unlock()
-
-  // check if subscription type for the client is active
-  if c.pendingTransactionsIsActive {
-    responseRPC.Error = "pendingTransactions subscription already active. Subscription ID: " + c.pendingTransactionsSubscriptionID
-    return
-  }
-
-  // if not subscribe to broadcaster
-  c.pendingTransactionsSource = c.pendingTransactionsBroadcaster.Subscribe()
-
-  // generate subscription id
-  responseRPC.Result = utils.NewID()
-  responseRPC.ID = requestRPC.ID
-
-  // register subscription id for client
-  c.pendingTransactionsSubscriptionID = responseRPC.Result
-  c.pendingTransactionsIsActive = true
-  go c.CollectPendingTransactions()
-}
-
-func (c *Client) CollectPendingTransactions() {
-  // listen for incoming pending transactions and send to user
-  for  {
-      select {
-      case tx, ok := <- c.pendingTransactionsSource:
-        //channel has been closed
-        if ok == false {
-          return
-        }
-        // case when response to subscribe request isn't sent yet
-        c.pendingTransactionsLocker.Lock()
-        if c.pendingTransactionsIsActive == false {
-          c.pendingTransactionsLocker.Unlock()
-          continue
-        }
-
-        // construct response object for new event
-        var clientResponse ClientResponse
-        clientResponse.Jsonrpc = rpcVersion
-        clientResponse.Method = methodSubscriptionName
-        clientResponse.Params.Subscription = c.pendingTransactionsSubscriptionID
-        clientResponse.Params.Result = []byte("\"" + tx.(string) + "\"")
-        c.pendingTransactionsLocker.Unlock()
-
-        // marshal to send it as a json
-        response, _ := json.Marshal(clientResponse)
-        c.clientResponseBuffer <- response
-      }
-  }
-}
-
-
-func (c *Client) subscribeToNewHeads(requestRPC SubscribeJsonRPC, responseRPC *SubscribeJsonResponseRCP) {
-  // if new head subscription is active skip another subscription
-  c.newHeadsLocker.Lock()
-  defer c.newHeadsLocker.Unlock()
-
-  // check if subscription type for the client is active
-  if c.newHeadsIsActive {
-    responseRPC.Error = "newHeads subscription already active. Subscription ID: " + c.newHeadSubscriptionID
-    return
-  }
-
-  // if not subscribe to broadcaster
-  c.newHeadsSource = c.newHeadsBroadcaster.Subscribe()
-
-  // generate subscription id
-  responseRPC.Result = utils.NewID()
-  responseRPC.ID = requestRPC.ID
-
-  // register subscription id for client
-  c.newHeadSubscriptionID = responseRPC.Result
-  c.newHeadsIsActive = true
-  c.log.Info().Msg("NewHeads subscription succeeded with ID: " + responseRPC.Result)
-  go c.CollectNewHeads()
-}
-
-func (c *Client) CollectNewHeads() {
-  // listen for incoming heads and send to user
-  for  {
-      select {
-      case newHead, ok := <- c.newHeadsSource:
-        //channel has been closed
-        if ok == false {
-          return
-        }
-        // case when subscription response isn't sent yet
-        c.newHeadsLocker.Lock()
-        if c.newHeadsIsActive == false {
-          c.newHeadsLocker.Unlock()
-          continue
-        }
-
-        // construct response object for new event
-        var clientResponse ClientResponse
-        clientResponse.Jsonrpc = rpcVersion
-        clientResponse.Method = methodSubscriptionName
-        clientResponse.Params.Subscription = c.newHeadSubscriptionID
-        clientResponse.Params.Result = newHead.([]byte)
-        c.newHeadsLocker.Unlock()
-
-        // marshal to send it as a json
-        response, _ := json.Marshal(clientResponse)
-        c.clientResponseBuffer <- response
-      }
-  }
-}
+// to be implemented
+func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *SubscribeJsonResponseRCP) {}
 
 // closing client connection unsubscribes everything and closes connection, cancelling subscription is safe even if we hadn't subscribed
 func (c *Client) Close() {
