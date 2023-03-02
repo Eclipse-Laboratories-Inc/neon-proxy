@@ -1,6 +1,8 @@
 package event
 
 import (
+	"errors"
+	"fmt"
 	"sort"
 	"sync"
 )
@@ -8,7 +10,7 @@ import (
 type DispatcherInterface interface {
 	Register(handler Handler, event Event, priority int)
 	UnRegister(event Event)
-	Notify(event Event)
+	Notify(event Event) error
 	MustTrigger(event Event) // panic on error
 }
 
@@ -44,6 +46,12 @@ type Dispatcher struct {
 	handlers map[string]SortedHandlers
 }
 
+func NewDispatcher() *Dispatcher {
+	return &Dispatcher{
+		handlers: make(map[string]SortedHandlers),
+	}
+}
+
 func (d *Dispatcher) Register(handler Handler, event Event, priority int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -61,9 +69,9 @@ func (d *Dispatcher) UnRegister(event Event) {
 	delete(d.handlers, name)
 }
 
-func (d *Dispatcher) Notify(event Event) {
+func (d *Dispatcher) Notify(event Event) error {
 	panicOnError := false
-	d.notify(event, panicOnError)
+	return d.notify(event, panicOnError)
 }
 
 func (d *Dispatcher) MustTrigger(event Event) {
@@ -71,29 +79,41 @@ func (d *Dispatcher) MustTrigger(event Event) {
 	d.notify(event, panicOnError)
 }
 
-func (d *Dispatcher) notify(event Event, panicOnError bool) {
+func (d *Dispatcher) notify(event Event, panicOnError bool) error {
+	if event.IsAsynchronous() {
+		go d.notifyEvent(event, panicOnError)
+		return nil // todo: ignoring errors in async mode
+	}
+	return d.notifyEvent(event, panicOnError)
+}
+
+func (d *Dispatcher) notifyEvent(event Event, panicOnError bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if event.IsAsynchronous() {
-		go d.notifyEvent(event, panicOnError)
-	} else {
-		d.notifyEvent(event, panicOnError)
-	}
-}
-
-func (d *Dispatcher) notifyEvent(event Event, panicOnError bool) {
 	name := event.Name()
+	var errs []error
 	for _, hd := range d.handlers[name] {
 		err := hd.handler.Handle(event)
-		if panicOnError && err != nil {
-			panic(err)
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
+
+	err := formatErrors(errs)
+	if panicOnError && err != nil {
+		panic(err)
+	}
+	return err
 }
 
-func NewDispatcher() *Dispatcher {
-	return &Dispatcher{
-		handlers: make(map[string]SortedHandlers),
+func formatErrors(errs []error) error {
+	if len(errs) == 0 {
+		return nil
 	}
+	errMsg := ""
+	for _, err := range errs {
+		errMsg += fmt.Sprintf("EventDispatcher: error on notify event %s \n", err.Error())
+	}
+	return errors.New(errMsg)
 }

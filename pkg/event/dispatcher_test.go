@@ -43,7 +43,8 @@ func TestDispatcherOneHandler(t *testing.T) {
 	}
 	d.Register(h, ev, High)
 
-	d.Notify(ev)
+	err := d.Notify(ev)
+	assert.NoError(t, err)
 	assert.Equal(t, "ABCD-event", ev.Name())
 	assert.Len(t, processedTestHandlers, 1)
 	assert.Equal(t, processedTestHandlers[0], "ABCD-Handler")
@@ -80,7 +81,8 @@ func TestDispatcherMultyHandlersWithPriority(t *testing.T) {
 		d.Register(h, ev, priority)
 	}
 
-	d.Notify(ev)
+	err := d.Notify(ev)
+	assert.NoError(t, err)
 	assert.Equal(t, "ABCD-event", ev.Name())
 	assert.Equal(t, len(processedTestHandlers), len(priorities))
 
@@ -128,7 +130,8 @@ func TestDispatcherHandlerFuncWithPriority(t *testing.T) {
 	d.Register(f1, ev, 10)
 	d.Register(f2, ev, 15)
 
-	d.Notify(ev)
+	err := d.Notify(ev)
+	assert.NoError(t, err)
 	assert.Equal(t, "ABCD-event", ev.Name())
 	assert.Equal(t, len(processedTestHandlers), 2+len(priorities))
 
@@ -166,10 +169,11 @@ func TestDispatcherAsyncEvent(t *testing.T) {
 		d.Register(h, ev, priority)
 	}
 
-	d.Notify(ev)
+	err := d.Notify(ev)
 
 	time.Sleep(10 * time.Millisecond)
 
+	assert.NoError(t, err)
 	assert.Equal(t, "ABCD-event-async", ev.Name())
 	assert.Equal(t, len(processedTestHandlers), len(priorities))
 
@@ -182,25 +186,31 @@ func TestDispatcherAsyncEvent(t *testing.T) {
 }
 
 func testHandlerFuncError(e Event) error {
-	processedTestHandlers = append(processedTestHandlers, "testHandlerFuncError")
 	return errors.New("Something Wrong")
 }
 
+func testHandlerFuncError1(e Event) error {
+	return errors.New("Something Wrong1")
+}
+
 func TestDispatcherMustTriggerWithError(t *testing.T) {
-	processedTestHandlers = nil
 	d := NewDispatcher()
 	ev := TestEvent{
 		name: "ABCD-event",
 	}
 
 	ferr := TestHandlerFunc(testHandlerFuncError)
-	d.Register(ferr, ev, High)
+	ferr1 := TestHandlerFunc(testHandlerFuncError1)
 
-	d.Notify(ev)
+	d.Register(ferr, ev, High)
+	d.Register(ferr1, ev, Low)
+
+	expectedErrorMsg := "EventDispatcher: error on notify event Something Wrong \nEventDispatcher: error on notify event Something Wrong1 \n"
+
+	err := d.Notify(ev)
+	assert.EqualError(t, err, expectedErrorMsg)
 	assert.Equal(t, "ABCD-event", ev.Name())
-	assert.Len(t, processedTestHandlers, 1)
-	assert.Equal(t, processedTestHandlers[0], "testHandlerFuncError")
 
 	// check MustTrigger
-	assert.PanicsWithError(t, "Something Wrong", func() { d.MustTrigger(ev) })
+	assert.PanicsWithError(t, expectedErrorMsg, func() { d.MustTrigger(ev) })
 }
