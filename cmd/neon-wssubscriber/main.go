@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/neonlabsorg/neon-proxy/pkg/service"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber"
 	wsconfig "github.com/neonlabsorg/neon-proxy/internal/wssubscriber/config"
+	"github.com/neonlabsorg/neon-proxy/pkg/service"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
 )
 
