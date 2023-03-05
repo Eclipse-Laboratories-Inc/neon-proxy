@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -150,7 +151,14 @@ func processBlocks(ctx *context.Context, solanaWebsocketEndpoint string, log log
 			return errors.New(blockHeader.Error.Message)
 		} else {
 			// insert new block to be broadcasted
-			clientResponse, _ := json.Marshal(blockHeader.Result)
+			clientResponse, err := json.Marshal(blockHeader.Result)
+
+			// check json marshaling error
+			if err != nil {
+				log.Error().Err(err).Msg(fmt.Sprintf("marshalling response output: %v", err))
+				return err
+			}
+
 			broadcaster <- clientResponse
 			*from++
 		}

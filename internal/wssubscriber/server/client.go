@@ -125,7 +125,14 @@ func (c *Client) ReadPump() {
 
 		// process request
 		response := c.ProcessRequest(bytes.TrimSpace(bytes.Replace(message, []byte{'\n'}, []byte{' '}, -1)))
-		res, _ := json.Marshal(response)
+		res, err := json.Marshal(response)
+
+		// check json marshaling error
+		if err != nil {
+			c.log.Error().Err(err).Msg(fmt.Sprintf("marshalling response output: %v", err))
+			continue
+		}
+
 		c.clientResponseBuffer <- res
 	}
 }

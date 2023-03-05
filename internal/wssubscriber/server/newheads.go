@@ -58,7 +58,15 @@ func (c *Client) CollectNewHeads() {
 			c.newHeadsLocker.Unlock()
 
 			// marshal to send it as a json
-			response, _ := json.Marshal(clientResponse)
+			response, err := json.Marshal(clientResponse)
+
+			// check json marshaling error
+			if err != nil {
+				c.log.Error().Err(err).Msg(fmt.Sprintf("marshalling response output: %v", err))
+				return
+			}
+
+			// push new response
 			c.clientResponseBuffer <- response
 		}
 	}
