@@ -49,6 +49,11 @@ func (s *WSSubscriber) Run() error {
 		return err
 	}
 
+	// creates a broadcaster already pulling logs
+	if err := server.StartLogsBroadcaster(s.cfg.SolanaRPCEndpoint); err != nil {
+		return err
+	}
+
 	// start ws server for incoming subscriptions
 	go server.StartServer(s.cfg.WssubscriberPort)
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
 )

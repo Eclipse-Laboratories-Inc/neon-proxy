@@ -30,6 +30,8 @@ type Server struct {
 	//pending transaction broadcaster instance
 	pendingTransactionBroadcaster *broadcaster.Broadcaster
 
+	logsBroadcaster *broadcaster.Broadcaster
+
 	// logger instance
 	log logger.Logger
 }
@@ -46,7 +48,7 @@ func (server *Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create a new client associated with the connection
-	client := NewClient(conn, server.log, server.newHeadsBroadcaster, server.pendingTransactionBroadcaster)
+	client := NewClient(conn, server.log, server.newHeadsBroadcaster, server.pendingTransactionBroadcaster, server.logsBroadcaster)
 
 	// listen for incoming subscriptions.
 	go client.ReadPump()
@@ -105,6 +107,31 @@ func (server *Server) StartPendingTransactionBroadcaster() error {
 	// register pendingTransaction broadcaster to use with connected clients later. At this point the broadcaster is active and waiting for new subscribers to join.
 	server.pendingTransactionBroadcaster = broadcaster
 	server.log.Info().Msg("pendingTransaction broadcaster sources registered")
+	return nil
+}
+
+func (server *Server) StartLogsBroadcaster(solanaWSEndpoint string) error {
+	// create a new broadcaster
+	broadcaster := broadcaster.NewBroadcaster(server.ctx, server.log)
+
+	/*
+	   start broadcasting incoming new heads to subscribers. We need to activate broadcaster
+	   before pushing new data into it's source as pushing will block if broadcaster isn't active and receiving the data
+	*/
+	go broadcaster.Start()
+
+	/*
+	   register source and sourceError for newLogs broadcaster.
+	   After registering sources a separate routine will process new finalized block headers and push them into the source of the broadcaster
+	   which on it's own distribute those block heads (headers) to subscribed users
+	*/
+	if err := source.RegisterLogsBroadcasterSources(server.ctx, server.log, solanaWSEndpoint, broadcaster); err != nil {
+		return err
+	}
+
+	// register newHeads broadcaster to use with connected clients later. At this point the broadcaster is active and waiting for new subscribers to join.
+	server.logsBroadcaster = broadcaster
+	server.log.Info().Msg("newHeads broadcaster sources registered")
 	return nil
 }
 
