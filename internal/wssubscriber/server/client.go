@@ -280,7 +280,7 @@ func (c *Client) unsubscribe(requestRPC SubscribeJsonRPC, responseRPC *Subscribe
 
 // to be implemented
 func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *SubscribeJsonResponseRCP) {
-	// if new head subscription is active skip another subscription
+	// if new logs subscription is active skip another subscription
 	c.newLogsLocker.Lock()
 	defer c.newLogsLocker.Unlock()
 
@@ -300,13 +300,13 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 	// register subscription id for client
 	c.newLogsSubscriptionID = responseRPC.Result
 	c.newLogsIsActive = true
-	c.log.Info().Msg("NewHeads subscription succeeded with ID: " + responseRPC.Result)
+	c.log.Info().Msg("NewLogs subscription succeeded with ID: " + responseRPC.Result)
 	go c.CollectNewLogs()
 }
 
-// collects new heads coming from broadcaster and pushes the data into the client response buffer
+// collects new logs coming from broadcaster and pushes the data into the client response buffer
 func (c *Client) CollectNewLogs() {
-	// listen for incoming heads and send to user
+	// listen for incoming logs and send to user
 	for {
 		select {
 		case newLog, ok := <-c.newLogsSource:
@@ -316,7 +316,7 @@ func (c *Client) CollectNewLogs() {
 			}
 			// case when subscription response isn't sent yet, or it's not active anymore
 			c.newLogsLocker.Lock()
-			if c.newHeadsIsActive == false {
+			if c.newLogsIsActive == false {
 				c.newLogsLocker.Unlock()
 				continue
 			}
@@ -350,6 +350,7 @@ func (c *Client) Close() {
 		c.conn.Close()
 		c.newHeadsBroadcaster.CancelSubscription(c.newHeadsSource)
 		c.pendingTransactionsBroadcaster.CancelSubscription(c.pendingTransactionsSource)
+		c.newLogsBroadcaster.CancelSubscription(c.newLogsSource)
 		close(c.clientResponseBuffer)
 	})
 }
