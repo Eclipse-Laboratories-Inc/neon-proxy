@@ -110,6 +110,7 @@ func (server *Server) StartPendingTransactionBroadcaster() error {
 	return nil
 }
 
+// creates broadcaster for receiving transaction logs from evm
 func (server *Server) StartLogsBroadcaster(solanaWSEndpoint string) error {
 	// create a new broadcaster
 	broadcaster := broadcaster.NewBroadcaster(server.ctx, server.log)
