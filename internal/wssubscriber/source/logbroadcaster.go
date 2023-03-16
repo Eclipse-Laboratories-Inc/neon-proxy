@@ -170,11 +170,6 @@ func getLogsFromBlocks(solanaWebsocketEndpoint string, logParser chan interface{
 			return errors.New(block.Error.Message)
 		} else {
 			logs := removeDuplicates(block)
-
-			for _, l := range logs {
-				log.Println(l)
-			}
-
 			clientResponse, err := json.Marshal(logs)
 			if err != nil {
 				return err
