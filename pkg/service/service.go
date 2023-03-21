@@ -10,11 +10,45 @@ import (
 	"syscall"
 
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/neonlabsorg/neon-proxy/pkg/communication"
+	"github.com/neonlabsorg/neon-proxy/pkg/event"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"github.com/neonlabsorg/neon-proxy/pkg/metrics"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
 	"github.com/urfave/cli/v2"
 )
+
+type PostServiceStartedEvent struct {
+	serviceName string
+}
+
+func (e PostServiceStartedEvent) Name() string {
+	return "post.service.created"
+}
+
+func (e PostServiceStartedEvent) IsAsynchronous() bool {
+	return false
+}
+
+func (e PostServiceStartedEvent) ServiceName() string {
+	return e.serviceName
+}
+
+type PostServiceOnlineEvent struct {
+	serviceName string
+}
+
+func (e PostServiceOnlineEvent) Name() string {
+	return "post.service.online"
+}
+
+func (e PostServiceOnlineEvent) IsAsynchronous() bool {
+	return false
+}
+
+func (e PostServiceOnlineEvent) ServiceName() string {
+	return e.serviceName
+}
 
 var Version string
 
@@ -62,6 +96,11 @@ func CreateService(
 		s.initMetrics(configuration.MetricsServer)
 	}
 
+	s.initCommunicationProtocol(configuration.CommunicationProtocol)
+
+	postCreated := PostServiceStartedEvent{serviceName: s.name}
+	event.DispatcherInstance().Notify(postCreated)
+
 	return s
 }
 
@@ -70,6 +109,9 @@ func (s *Service) Run() {
 	if err != nil {
 		panic(err.Error())
 	}
+
+	onlineEvent := PostServiceOnlineEvent{serviceName: s.name}
+	event.DispatcherInstance().Notify(onlineEvent)
 }
 
 func (s *Service) run(cliContext *cli.Context) (err error) {
@@ -175,6 +217,43 @@ func (s *Service) initMetrics(cfg *configuration.MetricsServerConfiguration) {
 	go func() {
 		if err := metricsServer.RunServer(); err != nil {
 			s.GetLogger().Error().Err(err).Msg("can't start metrics server")
+			panic(err)
+		}
+	}()
+}
+
+func (s *Service) initCommunicationProtocol(cfg *configuration.CommunicationProtocolConfiguration) {
+	if cfg.MainConfig == nil || cfg.CommunicationServerPort == "" || cfg.CommunicationEndpointServerPort == "" {
+		s.GetLogger().Info().Msg("Communication Protocol server inicialization has been skipped")
+		return
+	}
+
+	communicationServer := communication.NewCommunicationServer(
+		s.GetContext(),
+		cfg.MainConfig.Role,
+		cfg.MainConfig.InstanceID,
+		cfg.MainConfig.Ip,
+		cfg.MainConfig.Cluster,
+		cfg.RelativeConfigs,
+		cfg.CommunicationServerPort,
+		cfg.CommunicationEndpointServerPort,
+	)
+
+	go func() {
+		if err := communicationServer.RegisterServer(); err != nil {
+			s.GetLogger().Error().Err(err).Msg("can't register communication server")
+			panic(err)
+		}
+	}()
+
+	if err := communicationServer.Init(); err != nil {
+		s.GetLogger().Error().Err(err).Msg("can't initialize communication protocols")
+		panic(err)
+	}
+
+	go func() {
+		if err := communicationServer.RunServer(); err != nil {
+			s.GetLogger().Error().Err(err).Msg("can't start communication server")
 			panic(err)
 		}
 	}()
