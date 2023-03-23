@@ -15,7 +15,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 
 	// check if subscription type for the client is active
 	if c.newLogsIsActive {
-		responseRPC.Error = "newHeads subscription already active. Subscription ID: " + c.newLogsSubscriptionID
+		responseRPC.Error = "newLogs subscription already active. Subscription ID: " + c.newLogsSubscriptionID
 		return
 	}
 

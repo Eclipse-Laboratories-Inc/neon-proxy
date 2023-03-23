@@ -6,70 +6,20 @@ import (
 	"errors"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
-	"log"
 	"strconv"
 	"time"
 )
 
-type Block struct {
-	Jsonrpc string `json:"jsonrpc"`
-	Result  struct {
-		BlockHeight       int         `json:"blockHeight"`
-		BlockTime         interface{} `json:"blockTime"`
-		Blockhash         string      `json:"blockhash"`
-		ParentSlot        int         `json:"parentSlot"`
-		PreviousBlockhash string      `json:"previousBlockhash"`
-		Transactions      []struct {
-			Meta struct {
-				Err               interface{}   `json:"err"`
-				Fee               int           `json:"fee"`
-				InnerInstructions []interface{} `json:"innerInstructions"`
-				LogMessages       []string      `json:"logMessages"`
-				PostBalances      []int64       `json:"postBalances"`
-				PostTokenBalances []interface{} `json:"postTokenBalances"`
-				PreBalances       []int64       `json:"preBalances"`
-				PreTokenBalances  []interface{} `json:"preTokenBalances"`
-				Rewards           interface{}   `json:"rewards"`
-				Status            struct {
-					Ok interface{} `json:"Ok"`
-				} `json:"status"`
-			} `json:"meta"`
-			Transaction struct {
-				Message struct {
-					AccountKeys []string `json:"accountKeys"`
-					Header      struct {
-						NumReadonlySignedAccounts   int `json:"numReadonlySignedAccounts"`
-						NumReadonlyUnsignedAccounts int `json:"numReadonlyUnsignedAccounts"`
-						NumRequiredSignatures       int `json:"numRequiredSignatures"`
-					} `json:"header"`
-					Instructions []struct {
-						Accounts       []int  `json:"accounts"`
-						Data           string `json:"data"`
-						ProgramIdIndex int    `json:"programIdIndex"`
-					} `json:"instructions"`
-					RecentBlockhash string `json:"recentBlockhash"`
-				} `json:"message"`
-				Signatures []string `json:"signatures"`
-			} `json:"transaction"`
-		} `json:"transactions"`
-	} `json:"result"`
-	Error *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
-	Id int `json:"id"`
-}
-
 // RegisterNewHeadBroadcasterSources passes data and error channels where new incoming data (block heads) will be pushed and redirected to broadcaster
-func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, endpoint string, broadcaster *broadcaster.Broadcaster) error {
+func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, endpoint string, broadcaster *broadcaster.Broadcaster) error {
 	log.Info().Msg("pending transaction pulling from mempool started ... ")
 
 	// declare sources to be set
-	source := make(chan interface{})
-	sourceError := make(chan error)
+	logsSource := make(chan interface{})
+	logsSourceError := make(chan error)
 
 	// register given sources
-	broadcaster.SetSources(source, sourceError)
+	broadcaster.SetSources(logsSource, logsSourceError)
 
 	go func() {
 		var latestProcessedBlockSlot uint64
@@ -80,7 +30,7 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, end
 			slotResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method":"getSlot", "params":[{"commitment":"finalized"}]}`), endpoint, "POST")
 			if err != nil {
 				log.Error().Err(err).Msg("Error on rpc call for checking the latest slot on chain")
-				sourceError <- err
+				logsSourceError <- err
 				continue
 			}
 
@@ -98,15 +48,15 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, end
 			// unrmarshal latest block slot
 			err = json.Unmarshal(slotResponse, &blockSlot)
 			if err != nil {
-				sourceError <- err
 				log.Error().Err(err).Msg("Error on unmarshaling slot response from rpc endpoint")
+				logsSourceError <- err
 				continue
 			}
 
 			// error from rpc
 			if blockSlot.Error.Message != "" {
 				log.Error().Err(err).Msg("Error from rpc endpoint")
-				sourceError <- err
+				logsSourceError <- err
 				continue
 			}
 
@@ -117,12 +67,9 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, end
 			}
 
 			log.Info().Msg("logParser: processing blocks from " + strconv.FormatUint(latestProcessedBlockSlot, 10) + " to " + strconv.FormatUint(blockSlot.Result, 10))
-			err = getLogsFromBlocks(endpoint, source, &latestProcessedBlockSlot, blockSlot.Result)
-			// check unmarshaling error
-			if err != nil {
+			if err := getLogsFromBlocks(endpoint, logsSource, &latestProcessedBlockSlot, blockSlot.Result); err != nil {
 				log.Error().Err(err).Msg("Error on processing blocks")
-				sourceError <- err
-				continue
+				logsSourceError <- err
 			}
 		}
 	}()
@@ -130,8 +77,9 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, end
 	return nil
 }
 
-func getLogsFromBlocks(solanaWebsocketEndpoint string, logParser chan interface{}, from *uint64, to uint64) error {
+func getLogsFromBlocks(solanaWebsocketEndpoint string, logParserSource chan interface{}, from *uint64, to uint64) error {
 	// process each block sequentially, broadcasting to peers
+	// using "transactionDetails":"full", we are getting full info about finalized executed transactions
 	for *from < to {
 		// get block with given slot
 		response, err := jsonRPC([]byte(`{
@@ -142,7 +90,8 @@ func getLogsFromBlocks(solanaWebsocketEndpoint string, logParser chan interface{
         {
           "encoding": "json",
           "maxSupportedTransactionVersion":0,
-          "transactionDetails":"full", "commitment" :"finalized",
+          "transactionDetails":"full", 
+          "commitment" :"finalized",
           "rewards":false
         }
       ]
@@ -156,7 +105,7 @@ func getLogsFromBlocks(solanaWebsocketEndpoint string, logParser chan interface{
 		var block Block
 
 		// unrmarshal latest block slot
-		if err = json.Unmarshal([]byte(response), &block); err != nil {
+		if err = json.Unmarshal(response, &block); err != nil {
 			return err
 		}
 
@@ -174,11 +123,32 @@ func getLogsFromBlocks(solanaWebsocketEndpoint string, logParser chan interface{
 			if err != nil {
 				return err
 			}
-			logParser <- clientResponse
+			logParserSource <- clientResponse
+
+			if err := getELogs(getTransactionsSignatures(block)); err != nil {
+				return err
+			}
 			*from++
 		}
 	}
 
+	return nil
+}
+
+// getting transaction signatures
+// https://docs.solana.com/api/http#transaction-structure
+func getTransactionsSignatures(block Block) TransactionSignaturesResponse {
+	txs := block.Result.Transactions
+	resp := TransactionSignaturesResponse{}
+	for _, tx := range txs {
+		resp.Signatures = append(resp.Signatures, tx.Transaction.Signatures...)
+	}
+
+	return resp
+}
+
+// TODO implement getting e-logs using transaction signatures
+func getELogs(signatures TransactionSignaturesResponse) error {
 	return nil
 }
 
