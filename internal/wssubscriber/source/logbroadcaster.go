@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"strconv"
@@ -34,16 +35,7 @@ func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, endpo
 				continue
 			}
 
-			// declare response json
-			var blockSlot struct {
-				Jsonrpc string `json:"jsonrpc"`
-				Result  uint64 `json:"result"`
-				ID      int    `json:"id"`
-				Error   struct {
-					Code    int    `json:"code"`
-					Message string `json:"message"`
-				} `json:"error"`
-			}
+			var blockSlot BlockSlot
 
 			// unrmarshal latest block slot
 			err = json.Unmarshal(slotResponse, &blockSlot)
@@ -125,7 +117,11 @@ func getLogsFromBlocks(solanaWebsocketEndpoint string, logParserSource chan inte
 			}
 			logParserSource <- clientResponse
 
-			if err := getELogs(getTransactionsSignatures(block)); err != nil {
+			signatures, err := getTransactionsSignatures(solanaWebsocketEndpoint, *from, block)
+			if err != nil {
+				return err
+			}
+			if err := getELogs(signatures); err != nil {
 				return err
 			}
 			*from++
@@ -137,18 +133,62 @@ func getLogsFromBlocks(solanaWebsocketEndpoint string, logParserSource chan inte
 
 // getting transaction signatures
 // https://docs.solana.com/api/http#transaction-structure
-func getTransactionsSignatures(block Block) TransactionSignaturesResponse {
+func getTransactionsSignatures(solanaWebsocketEndpoint string, fromSlot uint64, block Block) (*TransactionSignaturesResponse, error) {
+	accountKeys := map[string]struct{}{}
 	txs := block.Result.Transactions
-	resp := TransactionSignaturesResponse{}
+	resp := &TransactionSignaturesResponse{}
+
 	for _, tx := range txs {
-		resp.Signatures = append(resp.Signatures, tx.Transaction.Signatures...)
+		for _, key := range tx.Transaction.Message.AccountKeys {
+			accountKeys[key] = struct{}{}
+		}
 	}
 
-	return resp
+	for key, _ := range accountKeys {
+		var txSignaturesFromSlot GetTransactionSignatureByAccountKeyResp
+
+		fmt.Println(key)
+		req := `{
+		  "jsonrpc": "2.0","id":1,
+		  "method":"getSignaturesForAddress",
+		  "params": [
+		    "` + key + `",
+		    {
+		      "commitment" :"finalized"
+		    }
+		  ]
+		}`
+
+		response, err := jsonRPC([]byte(req), solanaWebsocketEndpoint, "POST")
+		if err != nil {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(response, &txSignaturesFromSlot); err != nil {
+			return nil, err
+		}
+
+		if txSignaturesFromSlot.Error != nil {
+			return nil, errors.New(txSignaturesFromSlot.Error.Message)
+		}
+
+		for _, res := range txSignaturesFromSlot.Result {
+			// transactions are already sorted from newest to oldest
+			// if slot is smaller, than current, than this tx is too old
+			if res.Slot < int64(fromSlot) {
+				break
+			}
+			if res.Slot == int64(fromSlot) {
+				resp.Signatures = append(resp.Signatures, res.Signature)
+			}
+		}
+	}
+
+	return resp, nil
 }
 
 // TODO implement getting e-logs using transaction signatures
-func getELogs(signatures TransactionSignaturesResponse) error {
+func getELogs(signatures *TransactionSignaturesResponse) error {
 	return nil
 }
 

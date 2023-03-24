@@ -1,5 +1,9 @@
 package source
 
+type Error struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
 type Header struct {
 	NumReadonlySignedAccounts   int `json:"numReadonlySignedAccounts"`
 	NumReadonlyUnsignedAccounts int `json:"numReadonlyUnsignedAccounts"`
@@ -56,10 +60,26 @@ type Block struct {
 		PreviousBlockhash string            `json:"previousBlockhash"`
 		Transactions      []TransactionFull `json:"transactions"`
 	} `json:"result"`
-	Error *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
+	Error *Error `json:"error,omitempty"`
+	Id    int    `json:"id"`
+}
+
+type BlockSlot struct {
+	Jsonrpc string `json:"jsonrpc"`
+	Result  uint64 `json:"result"`
+	ID      int    `json:"id"`
+	Error   Error  `json:"error,omitempty"`
+}
+
+type GetTransactionSignatureByAccountKeyResp struct {
+	Jsonrpc string `json:"jsonrpc"`
+	Error   *Error `json:"error,omitempty"`
+	Result  []struct {
+		Memo      interface{} `json:"memo"`
+		Signature string      `json:"signature"`
+		Slot      int64       `json:"slot"`
+		BlockTime int64       `json:"blockTime"`
+	} `json:"result"`
 	Id int `json:"id"`
 }
 
