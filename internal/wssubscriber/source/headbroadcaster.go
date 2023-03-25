@@ -65,21 +65,13 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
 			}
 
 			// declare response json
-			var blockSlot struct {
-				Jsonrpc string `json:"jsonrpc"`
-				Result  uint64 `json:"result"`
-				ID      int    `json:"id"`
-				Error   struct {
-					Code    int    `json:"code"`
-					Message string `json:"message"`
-				} `json:"error"`
-			}
+			var blockSlot BlockSlot
 
 			// unrmarshal latest block slot
-			err = json.Unmarshal([]byte(slotResponse), &blockSlot)
+			err = json.Unmarshal(slotResponse, &blockSlot)
 			if err != nil {
-				sourceError <- err
 				log.Error().Err(err).Msg("Error on unmarshaling slot response from rpc endpoint")
+				sourceError <- err
 				continue
 			}
 

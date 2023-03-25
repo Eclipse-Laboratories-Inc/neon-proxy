@@ -111,28 +111,28 @@ func (server *Server) StartPendingTransactionBroadcaster() error {
 }
 
 // creates broadcaster for receiving transaction logs from evm
-func (server *Server) StartLogsBroadcaster(solanaWSEndpoint string) error {
+func (server *Server) StartLogsBroadcaster(solanaWSEndpoint, evmAddr string) error {
 	// create a new broadcaster
 	broadcaster := broadcaster.NewBroadcaster(server.ctx, server.log)
 
 	/*
-	   start broadcasting incoming new heads to subscribers. We need to activate broadcaster
+	   start broadcasting incoming new logs to subscribers. We need to activate broadcaster
 	   before pushing new data into it's source as pushing will block if broadcaster isn't active and receiving the data
 	*/
 	go broadcaster.Start()
 
 	/*
 	   register source and sourceError for newLogs broadcaster.
-	   After registering sources a separate routine will process new finalized block headers and push them into the source of the broadcaster
-	   which on it's own distribute those block heads (headers) to subscribed users
+	   After registering sources a separate routine will process new transaction logs and push them into the source of the broadcaster
+	   which on it's own distribute those logs to subscribed users, using user's filters
 	*/
-	if err := source.RegisterLogsBroadcasterSources(server.ctx, server.log, solanaWSEndpoint, broadcaster); err != nil {
+	if err := source.RegisterLogsBroadcasterSources(server.ctx, server.log, solanaWSEndpoint, evmAddr, broadcaster); err != nil {
 		return err
 	}
 
 	// register newHeads broadcaster to use with connected clients later. At this point the broadcaster is active and waiting for new subscribers to join.
 	server.logsBroadcaster = broadcaster
-	server.log.Info().Msg("newHeads broadcaster sources registered")
+	server.log.Info().Msg("newLogs broadcaster sources registered")
 	return nil
 }
 
