@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"time"
 )
 
-// RegisterNewHeadBroadcasterSources passes data and error channels where new incoming data (block heads) will be pushed and redirected to broadcaster
+const MaxProcessedTransactionsBatch = 100
+
+// RegisterLogsBroadcasterSources passes data and error channels where new incoming data (transaction logs) will be pushed and redirected to broadcaster
 func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, solanaWebsocketEndpoint, evmAddress string, broadcaster *broadcaster.Broadcaster) error {
 	log.Info().Msg("pending transaction pulling from mempool started ... ")
 
@@ -22,41 +25,32 @@ func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, solan
 
 	go func() {
 		var lastProcessedTransactionSignature string
+		var untilParam string
 
 		ticker := time.NewTicker(1 * time.Second)
+		constString := fmt.Sprintf("%v", MaxProcessedTransactionsBatch)
+
 		for range ticker.C {
 			log.Info().Msg("logParser: latest processed transaction signature " + lastProcessedTransactionSignature)
 
 			// if lastProcessedTransactionSignature is set,
-			// return 100 transactions from newest to transaction, which signature
+			// return MaxProcessedTransactionsBatch transactions from newest to transaction, which signature
 			// is set in lastProcessedTransactionSignature
+			if len(lastProcessedTransactionSignature) != 0 {
+				untilParam = `, "until": "` + lastProcessedTransactionSignature + `"`
+			}
+
 			req := `{
 		  		"jsonrpc": "2.0","id":1,
 		  		"method":"getSignaturesForAddress",
 				"params": [
 		    		"` + evmAddress + `",
 		    		{
-              			"limit": 100,
-			  			"until": "` + lastProcessedTransactionSignature + `",  
-		      			"commitment" :"finalized"
+              			"limit": ` + constString + `,
+		      			"commitment" :"finalized"` + untilParam + `
 					}
 				]
 			}`
-
-			// otherwise return 100 newest transactions
-			if len(lastProcessedTransactionSignature) == 0 {
-				req = `{
-		  		"jsonrpc": "2.0","id":1,
-		  		"method":"getSignaturesForAddress",
-				"params": [
-		    		"` + evmAddress + `",
-		    		{
-              			"limit": 100, 
-		      			"commitment" :"finalized"
-					}
-				]
-			}`
-			}
 
 			response, err := jsonRPC([]byte(req), solanaWebsocketEndpoint, "POST")
 			if err != nil {
@@ -88,21 +82,4 @@ func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, solan
 		}
 	}()
 	return nil
-}
-
-func removeDuplicates(block Block) []string {
-	logsMap := make(map[string]struct{}, 0)
-	for _, tx := range block.Result.Transactions {
-		for _, log := range tx.Meta.LogMessages {
-			logsMap[log] = struct{}{}
-		}
-	}
-
-	logs := make([]string, len(logsMap))
-	var i int64
-	for log := range logsMap {
-		logs[i] = log
-		i++
-	}
-	return logs
 }
