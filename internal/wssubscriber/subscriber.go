@@ -50,7 +50,7 @@ func (s *WSSubscriber) Run() error {
 	}
 
 	// creates a broadcaster already pulling logs
-	if err := server.StartLogsBroadcaster(s.cfg.SolanaRPCEndpoint); err != nil {
+	if err := server.StartLogsBroadcaster(s.cfg.SolanaRPCEndpoint, s.cfg.EvmAddress); err != nil {
 		return err
 	}
 

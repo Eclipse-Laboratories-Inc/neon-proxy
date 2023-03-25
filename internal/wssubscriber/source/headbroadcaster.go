@@ -70,8 +70,8 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
 			// unrmarshal latest block slot
 			err = json.Unmarshal(slotResponse, &blockSlot)
 			if err != nil {
-				sourceError <- err
 				log.Error().Err(err).Msg("Error on unmarshaling slot response from rpc endpoint")
+				sourceError <- err
 				continue
 			}
 

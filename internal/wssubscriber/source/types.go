@@ -82,7 +82,3 @@ type GetTransactionSignatureByAccountKeyResp struct {
 	} `json:"result"`
 	Id int `json:"id"`
 }
-
-type TransactionSignaturesResponse struct {
-	Signatures []string `json:"signatures"`
-}
