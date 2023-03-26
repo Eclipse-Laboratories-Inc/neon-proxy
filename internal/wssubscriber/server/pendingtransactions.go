@@ -34,6 +34,9 @@ func (c *Client) subscribeToNewPendingTransactions(requestRPC SubscribeJsonRPC, 
 
 // runs a separate go routine to collect incoming pending transactiosn from broadcaster and pusing them into client response buffer
 func (c *Client) CollectPendingTransactions() {
+	// defer unsubscribe
+	defer c.pendingTransactionsBroadcaster.CancelSubscription(c.pendingTransactionsSource)
+
 	// listen for incoming pending transactions and send to user
 	for {
 		select {

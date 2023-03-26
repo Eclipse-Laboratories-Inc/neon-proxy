@@ -35,6 +35,9 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 
 // collects new logs coming from broadcaster and pushes the data into the client response buffer
 func (c *Client) CollectNewLogs() {
+	// defer unsubscribe
+	defer c.newLogsBroadcaster.CancelSubscription(c.newLogsSource)
+
 	// listen for incoming logs and send to user
 	for {
 		select {
