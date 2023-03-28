@@ -46,6 +46,7 @@ func (c *Client) CollectNewLogs() {
 			if ok == false {
 				return
 			}
+
 			// case when subscription response isn't sent yet, or it's not active anymore
 			c.newLogsLocker.Lock()
 			if c.newLogsIsActive == false {

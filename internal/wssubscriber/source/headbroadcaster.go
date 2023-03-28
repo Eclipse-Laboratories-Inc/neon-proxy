@@ -76,7 +76,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
 			}
 
 			// error from rpc
-			if blockSlot.Error.Message != "" {
+			if blockSlot.Error != nil && blockSlot.Error.Message != "" {
 				log.Error().Err(err).Msg("Error from rpc endpoint")
 				sourceError <- err
 				continue
