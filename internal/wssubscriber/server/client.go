@@ -67,6 +67,7 @@ type Client struct {
 	newLogsLocker         sync.Mutex
 	newLogsIsActive       bool
 	newLogsSubscriptionID string
+	logsFilters           logsFilters
 }
 
 // json object sent back to the client
@@ -84,6 +85,16 @@ type SubscribeJsonRPC struct {
 	Method string        `json:"method"`
 	ID     uint64        `json:"id"`
 	Params []interface{} `json:"params"`
+}
+
+type logsFilters struct {
+	Addresses map[string]struct{}
+	Topics    map[string]struct{}
+}
+
+type SubscribeLogsFilterParams struct {
+	Addresses []string `json:"addresses"`
+	Topics    []string `json:"topics"`
 }
 
 // subscription response from websocket

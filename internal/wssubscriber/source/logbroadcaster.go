@@ -14,7 +14,7 @@ const MaxProcessedTransactionsBatch = 100
 
 // RegisterLogsBroadcasterSources passes data and error channels where new incoming data (transaction logs) will be pushed and redirected to broadcaster
 func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, solanaWebsocketEndpoint, evmAddress string, broadcaster *broadcaster.Broadcaster) error {
-	log.Info().Msg("logs pulling from evm address started ... ")
+	log.Info().Msg("pending transaction pulling from mempool started ... ")
 
 	// declare sources to be set
 	logsSource := make(chan interface{})
@@ -29,7 +29,6 @@ func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, solan
 
 		ticker := time.NewTicker(1 * time.Second)
 		constString := fmt.Sprintf("%v", MaxProcessedTransactionsBatch)
-
 		for range ticker.C {
 			log.Info().Msg("logParser: latest processed transaction signature " + lastProcessedTransactionSignature)
 

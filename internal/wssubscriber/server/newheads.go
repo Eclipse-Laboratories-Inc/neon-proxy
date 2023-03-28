@@ -35,9 +35,6 @@ func (c *Client) subscribeToNewHeads(requestRPC SubscribeJsonRPC, responseRPC *S
 
 // collects new heads coming from broadcaster and pushes the data into the client response buffer
 func (c *Client) CollectNewHeads() {
-	// defer unsubscribe
-	defer c.newHeadsBroadcaster.CancelSubscription(c.newHeadsSource)
-
 	// listen for incoming heads and send to user
 	for {
 		select {

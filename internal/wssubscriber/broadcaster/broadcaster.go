@@ -11,6 +11,12 @@ Broadcaster system has one source that receives data and distributes
 to the subscribers. By using subscribe method it creates a new channel and pushes copied
 incoming data into each subscriber's channel. All the broadcaster functions are thread safe.
 */
+
+type listener struct {
+	Params      interface{}
+	DataChannel chan interface{}
+}
+
 type Broadcaster struct {
 	ctx            *context.Context
 	source         chan interface{}
