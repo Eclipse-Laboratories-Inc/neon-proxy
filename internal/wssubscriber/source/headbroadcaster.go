@@ -35,6 +35,18 @@ type BlockHeader struct {
 	} `json:"error,omitempty"`
 }
 
+type Error struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type BlockSlot struct {
+	Jsonrpc string `json:"jsonrpc"`
+	Result  uint64 `json:"result"`
+	ID      int    `json:"id"`
+	Error   *Error  `json:"error,omitempty"`
+}
+
 // RegisterNewHeadBroadcasterSources passes data and error channels where new incoming data (block heads) will be pushed and redirected to broadcaster
 func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint string, broadcaster *broadcaster.Broadcaster) error {
 	log.Info().Msg("block pulling from rpc started ... ")

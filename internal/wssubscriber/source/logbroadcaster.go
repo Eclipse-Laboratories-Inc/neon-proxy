@@ -3,30 +3,37 @@ package source
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"errors"
 	"fmt"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"time"
 )
 
 const MaxProcessedTransactionsBatch = 100
 
-// defines eth log structure for each transaction
-type EthLog struct {
+// eth event structure
+type Event struct {
 	Address          string   `json:"address"`
 	Topics           []string `json:"topics"`
 	Data             string   `json:"data"`
-	BlockNumber      string   `json:blockNumber`
-	TransactionHash  string   `json:"transactionHash"`
-	TransactionIndex string   `json:"transactionIndex"`
-	BlockHash        string   `json:"blockHash"`
 	LogIndex         string   `json:"logIndex"`
 	Removed          bool     `json:"removed"`
 }
 
+// defines eth log structure for each transaction
+type EthLog struct {
+	BlockNumber      string   `json:blockNumber`
+	TransactionHash  string   `json:"transactionHash"`
+	TransactionIndex string   `json:"transactionIndex"`
+	BlockHash        string   `json:"blockHash"`
+	Event
+}
+
 // RegisterLogsBroadcasterSources passes data and error channels where new incoming data (transaction logs) will be pushed and redirected to broadcaster
-func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, solanaWebsocketEndpoint, evmAddress string, broadcaster *broadcaster.Broadcaster) error {
+func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint, evmAddress string, broadcaster *broadcaster.Broadcaster) error {
 	log.Info().Msg("logs pulling from evm address started ... ")
 
 	// declare sources to be set
@@ -36,85 +43,123 @@ func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, solan
 	// register given sources
 	broadcaster.SetSources(logsSource, logsSourceError)
 
-	go func() {
-		// defines last transaction we parsed from evm
-		var lastProcessedTransactionSignature string
-		// construct until parameter for request
-		var untilParam string
+	// store latest processed block slot
+	var latestProcessedBlockSlot uint64
 
+	go func() {
 		// declare time interval for checking new transactions
 		ticker := time.NewTicker(1 * time.Second)
-		constString := fmt.Sprintf("%v", MaxProcessedTransactionsBatch)
 
 		for range ticker.C {
-			log.Info().Msg("logParser: latest processed transaction signature " + lastProcessedTransactionSignature)
+			log.Info().Msg("logParser: latest processed block slot signature " + fmt.Sprintf("%v", latestProcessedBlockSlot))
 
-			// if lastProcessedTransactionSignature is set,
-			// return MaxProcessedTransactionsBatch transactions from newest to transaction, which signature
-			// is set in lastProcessedTransactionSignature
-			if len(lastProcessedTransactionSignature) != 0 {
-				untilParam = `, "until": "` + lastProcessedTransactionSignature + `"`
-			}
-
-			req := `{
-		  		"jsonrpc": "2.0","id":1,
-		  		"method":"getSignaturesForAddress",
-				"params": [
-		    		"` + evmAddress + `",
-		    		{
-              			"limit": ` + constString + `,
-		      			"commitment" :"finalized"` + untilParam + `
-					}
-				]
-			}`
-
-			// get evm transaction from node
-			response, err := jsonRPC([]byte(req), solanaWebsocketEndpoint, "POST")
+			// get latest block number
+			slotResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method":"getSlot", "params":[{"commitment":"finalized"}]}`), solanaWebsocketEndpoint, "POST")
 			if err != nil {
-				log.Error().Err(err).Msg("Error on rpc call for getting batch of transactions signatures")
+				log.Error().Err(err).Msg("Error on rpc call for checking the latest slot on chain")
 				logsSourceError <- err
+				continue
 			}
 
-			// unmarshall response
-			var txSignaturesFromSlot GetTransactionSignatureByAccountKeyResp
-			if err := json.Unmarshal(response, &txSignaturesFromSlot); err != nil {
-				log.Error().Err(err).Msg("Error on unmarshaling transaction signatures response from rpc endpoint")
+			// declare response json
+			var blockSlot BlockSlot
+
+			// unrmarshal latest block slot
+			err = json.Unmarshal(slotResponse, &blockSlot)
+			if err != nil {
+				log.Error().Err(err).Msg("Error on unmarshaling slot response from rpc endpoint")
 				logsSourceError <- err
+				continue
 			}
 
-			// check response error message
-			if txSignaturesFromSlot.Error != nil {
-				err = errors.New(txSignaturesFromSlot.Error.Message)
-				log.Error().Err(err).Msg("Error on rpc call for getting batch of transactions signatures")
+			// error from rpc
+			if blockSlot.Error != nil && blockSlot.Error.Message != "" {
+				log.Error().Err(err).Msg("Error from rpc endpoint")
 				logsSourceError <- err
+				continue
 			}
 
-			// for each solana transaction signature parse ethereum data from logs and return the object
-			for ind := len(txSignaturesFromSlot.Result); ind >= 0; ind-- {
-				// get eth transaction by parsing solana transaction logs
-				ethLog, err := getEthLogs(txSignaturesFromSlot.Result[ind].Signature, log, solanaWebsocketEndpoint)
-				if err != nil {
-					log.Error().Err(err).Msg("Cannot get transaction logs")
-					logsSourceError <- err
-				}
-
-				// marshal eth object for broadcaster
-				logData, err := json.Marshal(ethLog)
-				if err != nil {
-					log.Error().Err(err).Msg("Cannot marshal eth object")
-					logsSourceError <- err
-				}
-
-				// push new log into broadcaster
-				logsSource <- logData
+			// check the first iteration
+			if latestProcessedBlockSlot == 0 {
+				latestProcessedBlockSlot = blockSlot.Result
+				continue
 			}
 
-			// set latest processed tx
-			if len(txSignaturesFromSlot.Result) != 0 {
-				lastProcessedTransactionSignature = txSignaturesFromSlot.Result[0].Signature
+			// process the blocks in given interval
+			log.Info().Msg("processing blocks from " + strconv.FormatUint(latestProcessedBlockSlot, 10) + " to " + strconv.FormatUint(blockSlot.Result, 10))
+			if err := processBlockLogs(ctx, solanaWebsocketEndpoint, log, logsSource, logsSourceError, &latestProcessedBlockSlot, blockSlot.Result); err != nil {
+				log.Error().Err(err).Msg("Error on processing blocks")
+				logsSourceError <- err
+				continue
 			}
 		}
 	}()
+	return nil
+}
+
+// request each block from "from" to "to" from the rpc endpoint and broadcast to user
+func processBlockLogs(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, logsSource chan interface{}, logsSourceError chan error, from *uint64, to uint64) error {
+	// process each block sequentially, broadcasting to peers
+	for *from < to {
+		// get block with given slot
+		response, err := jsonRPC([]byte(`{
+      "jsonrpc": "2.0","id":1,
+      "method":"getBlock",
+      "params": [
+        `+strconv.FormatUint(*from, 10)+`,
+        {
+          "encoding": "json",
+          "maxSupportedTransactionVersion":0,
+          "transactionDetails":"full", "commitment" :"finalized",
+          "rewards":false
+        }
+      ]
+    }`), solanaWebsocketEndpoint, "POST")
+
+		// check err
+		if err != nil {
+			return err
+		}
+
+		var block Block
+
+		// unrmarshal latest block slot
+		err = json.Unmarshal([]byte(response), &block)
+		if err != nil {
+			return err
+		}
+
+		// check rpc error
+		if block.Error != nil {
+			// check if the given slot was skipped if so we jump over it and continue processing blocks from the next slot
+			if block.Error.Code == slotWasSkippedErrorCode {
+				*from++
+				continue
+			}
+			return errors.New(block.Error.Message)
+		}
+
+		// get eth logs from block
+		ethlogs, err := getEthLogsFromBlock(&block, log, solanaWebsocketEndpoint)
+		if err != nil {
+			return err
+		}
+
+		// marshall each log and push into broadcaster
+		for _, ethLog := range ethlogs {
+			// insert new log to be broadcasted
+			clientResponse, err := json.Marshal(ethLog)
+
+			// check json marshaling error
+			if err != nil {
+				log.Error().Err(err).Msg(fmt.Sprintf("marshalling response output: %v", err))
+				return err
+			}
+
+			logsSource <- clientResponse
+		}
+	}
+
 	return nil
 }
 
@@ -122,35 +167,50 @@ func RegisterLogsBroadcasterSources(_ *context.Context, log logger.Logger, solan
 For each given solana transaction signature we request the whole transaction object
 from which we parse instruction data where eth transaction parameters (including logs) are stored
 */
-func getEthLogs(signature string, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
-	// get latest block number
-	txResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method":"getTransaction", "params":["`+signature+`" ,"json"]}`), solanaWebsocketEndpoint, "POST")
-	if err != nil {
-		log.Error().Err(err).Msg("Error on rpc call for getting transaction")
-		return nil, err
+func getEthLogsFromBlock(block *Block, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
+	// create response array of logs
+	ethLogs := make([]EthLog, 0)
+
+	// define log index value
+	var logIndex int
+
+	// process each transaction logs separately
+	for k := len(block.Result.Transactions) - 1; k >= 0; k-- {
+		// declare log instance to fill
+		var ethLog EthLog
+
+		// fill initial log values
+		ethLog.BlockHash = utils.Base64stringToHex(block.Result.Blockhash)
+		ethLog.BlockNumber = fmt.Sprintf("0x%x", block.Result.BlockHeight)
+		ethLog.TransactionHash = block.Result.Transactions[k].Transaction.Signatures[0]
+		ethLog.TransactionIndex = fmt.Sprintf("0x%x", len(block.Result.Transactions) - k - 1)
+
+		// parse events from solana transaction logs
+		events, err := getEvents(block.Result.Transactions[k].Meta.LogMessages, log, solanaWebsocketEndpoint)
+		if err != nil {
+			return nil, err
+		}
+
+		// fill events
+		for _, event := range events {
+			ethLog.Address = event.Address
+			ethLog.Data = event.Data
+			ethLog.LogIndex = fmt.Sprintf("0x%x", logIndex)
+			// increment index for the next log/event
+			logIndex++
+			ethLog.Removed = event.Removed
+			ethLog.Topics = event.Topics
+
+			// append new log
+			ethLogs = append(ethLogs, ethLog)
+		}
+
 	}
-
-	// declare response json
-	var solanaTx SolanaTx
-
-	// unrmarshal latest block slot
-	err = json.Unmarshal(txResponse, &solanaTx)
-	if err != nil {
-		log.Error().Err(err).Msg("Error on unmarshaling transaction response from rpc endpoint")
-		return nil, err
-	}
-
-	// error from rpc
-	if solanaTx.Error != nil && solanaTx.Error.Message != "" {
-		log.Error().Err(err).Msg("Error from rpc endpoint")
-		return nil, err
-	}
-
 	// given log messages from solaan tx we parse eth logs
-	return parseEthLogsFromLogMessages(solanaTx.Result.Meta.LogMessages, log, solanaWebsocketEndpoint)
+	return ethLogs, nil
 }
 
-// given log messages from solaan tx we parse eth logs
-func parseEthLogsFromLogMessages(logMessages []string, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
+// parses solana tx log messages and builds eth events
+func getEvents(logMessages []string, log logger.Logger, solanaWebsocketEndpoint string) ([]Event, error) {
 	return nil, nil
 }
