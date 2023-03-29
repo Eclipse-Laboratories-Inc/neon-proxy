@@ -1,5 +1,7 @@
 package indexer
 
+import "database/sql"
+
 // Indexer database
 type IndexerDB struct {
 	solanaBlocksDB  *SolanaBlocksDB
@@ -10,7 +12,16 @@ type IndexerDB struct {
 	neonTxsDB       *NeonTxsDB
 }
 
-func (db *IndexerDB) IsHealthy() bool              {}
+func (db *IndexerDB) Init(sdb *sql.DB) {
+	db.solanaBlocksDB = &SolanaBlocksDB{db: sdb}
+	db.solanaNeonTxDB = &SolanaNeonTxDB{db: sdb}
+	db.solanaSignsDB = &SolanaSignsDB{db: sdb}
+	db.solanaTxCostsDB = &SolanaTxCostsDB{db: sdb}
+	db.neonTxLogsDB = &NeonTxLogsDB{db: sdb}
+	db.neonTxsDB = &NeonTxsDB{db: sdb}
+}
+
+func (db *IndexerDB) IsHealthy() bool              { return true }
 func (db *IndexerDB) SubmitBlock()                 {}
 func (db *IndexerDB) FinalizeBlock()               {}
 func (db *IndexerDB) ActivateBlockList()           {}

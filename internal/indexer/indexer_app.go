@@ -1,11 +1,27 @@
 package indexer
 
+import (
+	"context"
+	"database/sql"
+
+	"github.com/neonlabsorg/neon-proxy/pkg/logger"
+)
+
 type IndexerApp struct {
-	collector *Collector
+	ctx    context.Context
+	logger logger.Logger
+	db     *IndexerDB
 }
 
-func NewIndexerApp() *IndexerApp {
-	return &IndexerApp{}
+func NewIndexerApp(ctx context.Context, log logger.Logger, db *sql.DB) *IndexerApp {
+	iDB := &IndexerDB{}
+	iDB.Init(db)
+
+	return &IndexerApp{
+		ctx:    ctx,
+		logger: log,
+		db:     iDB,
+	}
 }
 
 func (i *IndexerApp) Run() {

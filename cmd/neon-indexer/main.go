@@ -6,12 +6,16 @@ import (
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
 )
 
+const (
+	indexerServiceName = "indexer"
+)
+
 func main() {
 	s := service.CreateService(&configuration.Config{
-		Name: "indexer",
+		Name: indexerServiceName,
 		Storage: &configuration.ConfigStorageList{
 			Postgres: []string{
-				"indexer",
+				indexerServiceName,
 			},
 		},
 	})
@@ -22,6 +26,11 @@ func main() {
 }
 
 func runIndexer(s *service.Service) {
-	app := indexer.NewIndexerApp()
+	indexerDB, err := s.GetDB(indexerServiceName)
+	if err != nil {
+		panic(err)
+	}
+	db := indexerDB.GetRawDB()
+	app := indexer.NewIndexerApp(s.GetContext(), s.GetLogger(), db)
 	app.Run()
 }

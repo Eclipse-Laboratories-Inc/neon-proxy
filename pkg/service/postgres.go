@@ -142,3 +142,9 @@ func (m *PostgresManager) pingDB(connector *postgres.Connector) error {
 
 	return nil
 }
+
+func (m *PostgresManager) ShutDown() {
+	for _, connector := range m.connectors {
+		connector.GetRawDB().Close()
+	}
+}
