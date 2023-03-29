@@ -2,6 +2,18 @@ package indexer
 
 import (
 	"database/sql"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	solanaBlocksInsertedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "neon-proxy",
+		Subsystem: "indexer",
+		Name:      "inserted_solana_blocks_total",
+		Help:      "The total number of inserted solana blocks",
+	})
 )
 
 type SolanaBlocksDB struct {
@@ -17,5 +29,5 @@ func (s SolanaBlocksDB) GetTableName() string {
 }
 
 func (s SolanaBlocksDB) InsertBatch(data []map[string]string) (int64, error) {
-	return InsertBatchImpl(s, s.db, data)
+	return InsertBatchImpl(s, s.db, solanaBlocksInsertedCounter, data)
 }

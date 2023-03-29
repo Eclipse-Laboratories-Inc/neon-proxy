@@ -1,6 +1,8 @@
 package indexer
 
-import "database/sql"
+import (
+	"database/sql"
+)
 
 type SolanaSignsDB struct {
 	db *sql.DB

@@ -2,6 +2,18 @@ package indexer
 
 import (
 	"database/sql"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	neonTxLogsInsertedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "neon-proxy",
+		Subsystem: "indexer",
+		Name:      "inserted_neon_tx_logs_total",
+		Help:      "The total number of inserted neon transaction logs",
+	})
 )
 
 type NeonTxLogsDB struct {
@@ -22,5 +34,5 @@ func (n NeonTxLogsDB) GetTableName() string {
 }
 
 func (s NeonTxLogsDB) InsertBatch(data []map[string]string) (int64, error) {
-	return InsertBatchImpl(s, s.db, data)
+	return InsertBatchImpl(s, s.db, neonTxLogsInsertedCounter, data)
 }

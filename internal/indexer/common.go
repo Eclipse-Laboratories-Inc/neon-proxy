@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-func InsertBatchImpl(indexerDB DBInterface, db *sql.DB, data []map[string]string) (int64, error) {
+func InsertBatchImpl(indexerDB DBInterface, db *sql.DB, pCounter prometheus.Counter, data []map[string]string) (int64, error) {
 	colums := indexerDB.GetColums()
 	sqlStr := fmt.Sprintf("INSERT INTO %s(%s) VALUES ", indexerDB.GetTableName(), strings.Join(colums, ", "))
 	vals := []interface{}{}
@@ -33,5 +35,6 @@ func InsertBatchImpl(indexerDB DBInterface, db *sql.DB, data []map[string]string
 	if err != nil {
 		return 0, err
 	}
+	pCounter.Add(float64(len(data)))
 	return res.LastInsertId()
 }

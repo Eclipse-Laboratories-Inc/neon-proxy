@@ -1,6 +1,20 @@
 package indexer
 
-import "database/sql"
+import (
+	"database/sql"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	neonTxInsertedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "neon-proxy",
+		Subsystem: "indexer",
+		Name:      "inserted_neon_tx_total",
+		Help:      "The total number of inserted neon transactions",
+	})
+)
 
 type NeonTxsDB struct {
 	db *sql.DB
@@ -19,5 +33,5 @@ func (n NeonTxsDB) GetTableName() string {
 }
 
 func (s NeonTxsDB) InsertBatch(data []map[string]string) (int64, error) {
-	return InsertBatchImpl(s, s.db, data)
+	return InsertBatchImpl(s, s.db, neonTxInsertedCounter, data)
 }
