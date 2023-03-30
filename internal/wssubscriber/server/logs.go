@@ -67,6 +67,7 @@ func (c *Client) CollectNewLogs() {
 			if ok == false {
 				return
 			}
+
 			// case when subscription response isn't sent yet, or it's not active anymore
 			c.newLogsLocker.Lock()
 			if c.newLogsIsActive == false {
@@ -88,7 +89,7 @@ func (c *Client) CollectNewLogs() {
 			} else {
 				clientResponse.Params.Result = logs
 			}
-			
+
 			c.newLogsLocker.Unlock()
 
 			// marshal to send it as a json
@@ -107,8 +108,8 @@ func (c *Client) CollectNewLogs() {
 }
 
 func (c *Client) FilterLogs(newLogs []byte) ([]byte, error) {
-	filteredLogs := make([]source.Log, 0)
-	rowLogs := make([]source.Log, 0)
+	filteredLogs := make([]source.EthLog, 0)
+	rowLogs := make([]source.EthLog, 0)
 	if err := json.Unmarshal(newLogs, &rowLogs); err != nil {
 		return nil, err
 	}
