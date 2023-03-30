@@ -30,7 +30,6 @@ make run-indexer
 <div class="highlight highlight-source-shell"><pre>
 SOLANA_RPC_ENDPOINT=https://api.devnet.solana.com
 </pre></div>
-### Run indexer
 <div class="highlight highlight-source-shell"><pre>
 go run cmd/neon-wssubscriber/main.go
 </pre></div>
