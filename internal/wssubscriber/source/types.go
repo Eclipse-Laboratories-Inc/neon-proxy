@@ -10,7 +10,7 @@ type Block struct {
 		PreviousBlockhash string `json:"previousBlockhash"`
 		Transactions      []Transaction
 	} `json:"result"`
-	ID int `json:"id"`
+	ID    int `json:"id"`
 	Error *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
@@ -54,5 +54,4 @@ type Transaction struct {
 		} `json:"message"`
 		Signatures []string `json:"signatures"`
 	} `json:"transaction"`
-	Version string `json:"version"`
 }

@@ -44,7 +44,7 @@ type BlockSlot struct {
 	Jsonrpc string `json:"jsonrpc"`
 	Result  uint64 `json:"result"`
 	ID      int    `json:"id"`
-	Error   *Error  `json:"error,omitempty"`
+	Error   *Error `json:"error,omitempty"`
 }
 
 // RegisterNewHeadBroadcasterSources passes data and error channels where new incoming data (block heads) will be pushed and redirected to broadcaster
