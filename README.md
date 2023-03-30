@@ -26,6 +26,7 @@ make run-indexer
 <p>newHeads, logs and newPendingTransactions provide subscription endpoints for pulling new finalized block headers, neon pending transactions and specific solidity contract event logs </p>
 <p>Internally Subscriber uses rpc endpoint for pulling data from chain and connects to proxy Mempool for checking the list of pending transactions for subscribers</p>
 
+### Environment setup for WSSubscriber
 <div class="highlight highlight-source-shell"><pre>
 SOLANA_RPC_ENDPOINT=https://api.devnet.solana.com
 </pre></div>
