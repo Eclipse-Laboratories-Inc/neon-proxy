@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
@@ -24,6 +23,6 @@ func NewPoolConnector(name string, ctx context.Context, pool *pgxpool.Pool, conf
 	}
 }
 
-func (c *PoolConnector) GetPool() *sql.DB {
+func (c *PoolConnector) GetPool() *pgxpool.Pool {
 	return c.Pool
 }

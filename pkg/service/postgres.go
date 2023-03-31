@@ -96,7 +96,10 @@ func (m *PostgresManager) getPoolConnector(name string) (poolConnector *postgres
 	poolConnector, ok := m.poolConnectors[name]
 
 	if ok && poolConnector != nil {
-		return
+		err = m.pingPool(poolConnector)
+		if err == nil {
+			return
+		}
 	}
 
 	poolConnector, err = m.createPoolConnector(name)
@@ -178,6 +181,7 @@ func (m *PostgresManager) createPoolConnector(name string) (poolConnector *postg
 	}
 
 	poolConnector = postgres.NewPoolConnector(name, m.ctx, connPool, cfg)
+	err = m.pingPool(poolConnector)
 	return
 }
 
@@ -194,6 +198,16 @@ func (m *PostgresManager) getConfiguration(name string) (config *configuration.P
 
 func (m *PostgresManager) pingDB(connector *postgres.Connector) error {
 	err := connector.DB.Ping()
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *PostgresManager) pingPool(poolConnector *postgres.PoolConnector) error {
+	err := poolConnector.Pool.Ping(m.ctx)
 
 	if err != nil {
 		return err
