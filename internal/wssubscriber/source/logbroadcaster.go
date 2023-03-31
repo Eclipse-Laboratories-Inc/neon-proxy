@@ -43,9 +43,16 @@ const (
 
 // eth event log data parsed from solaan logs
 type NeonLogTxEvent struct {
+	eventType int
 	address   []byte
 	topicList []string
 	data      []byte
+}
+
+// current log and transaction index
+type Indexes struct {
+	transactionIndex int
+	logIndex int
 }
 
 // eth event structure
@@ -89,17 +96,26 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 	broadcaster.SetSources(logsSource, logsSourceError)
 
 	// store latest processed block slot
-	var latestProcessedBlockSlot uint64
+	var latestProcessedTransaction string
 
 	go func() {
 		// declare time interval for checking new transactions
 		ticker := time.NewTicker(1 * time.Second)
 
 		for range ticker.C {
-			log.Info().Msg("logParser: latest processed block slot signature " + fmt.Sprintf("%v", latestProcessedBlockSlot))
+			log.Info().Msg("logParser: latest processed transactionsignature " + latestProcessedTransaction)
+
+			// for saving current tx and log indexes
+			indexes := make(map[int]Indexes)
+
+			// prepare curl parameter
+			var untilParameter string
+			if latestProcessedTransaction != "" {
+				untilParameter = ", \"until\": \"" + latestProcessedTransaction + "\""
+			}
 
 			// get latest block number
-			slotResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method":"getSlot", "params":[{"commitment":"finalized"}]}`), solanaWebsocketEndpoint, "POST")
+			signaturesResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method": "getSignaturesForAddress", "params":["` + evmAddress + `",{"commitment":"finalized" ` + untilParameter + `}]}`), solanaWebsocketEndpoint, "POST")
 			if err != nil {
 				log.Error().Err(err).Msg("Error on rpc call for checking the latest slot on chain")
 				logsSourceError <- err
@@ -107,10 +123,10 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 			}
 
 			// declare response json
-			var blockSlot BlockSlot
+			var transactionSignatures TransactionSignatures
 
 			// unrmarshal latest block slot
-			err = json.Unmarshal(slotResponse, &blockSlot)
+			err = json.Unmarshal(signaturesResponse, &transactionSignatures)
 			if err != nil {
 				log.Error().Err(err).Msg("Error on unmarshaling slot response from rpc endpoint")
 				logsSourceError <- err
@@ -118,61 +134,57 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 			}
 
 			// error from rpc
-			if blockSlot.Error != nil && blockSlot.Error.Message != "" {
-				log.Error().Err(err).Msg("Error from rpc endpoint")
+			if transactionSignatures.Error != nil && transactionSignatures.Error.Message != "" {
+				log.Error().Err(err).Msg(transactionSignatures.Error.Message)
+				logsSourceError <- err
+				continue
+			}
+
+			// process the blocks in given interval
+			log.Info().Msg("processing logs")
+			if err := processTransactionLogs(ctx, solanaWebsocketEndpoint, log, logsSource, logsSourceError, &transactionSignatures, indexes); err != nil {
+				log.Error().Err(err).Msg("Error on processing tx logs")
 				logsSourceError <- err
 				continue
 			}
 
 			// check the first iteration
-			if latestProcessedBlockSlot == 0 {
-				latestProcessedBlockSlot = blockSlot.Result
-				continue
+			if len(transactionSignatures.Result) > 0 {
+				latestProcessedTransaction = transactionSignatures.Result[0].Signature
 			}
 
-			// process the blocks in given interval
-			log.Info().Msg("processing logs from block " + strconv.FormatUint(latestProcessedBlockSlot, 10) + " to " + strconv.FormatUint(blockSlot.Result, 10))
-			if err := processBlockLogs(ctx, solanaWebsocketEndpoint, log, logsSource, logsSourceError, &latestProcessedBlockSlot, blockSlot.Result); err != nil {
-				log.Error().Err(err).Msg("Error on processing blocks")
-				logsSourceError <- err
-				continue
-			}
 		}
 	}()
 	return nil
 }
 
 // request each block from "from" to "to" from the rpc endpoint and broadcast to user
-func processBlockLogs(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, logsSource chan interface{}, logsSourceError chan error, from *uint64, to uint64) error {
+func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, logsSource chan interface{}, logsSourceError chan error, signatures *TransactionSignatures, indexes map[int]Indexes) error {
 	// process each block sequentially, broadcasting to peers
-	for *from < to {
+	for k := len(signatures.Result) - 1; k >= 0; k-- {
 		// get block with given slot
-		response, err := jsonRPC([]byte(`{"jsonrpc": "2.0","id":1, "method":"getBlock", "params": [`+strconv.FormatUint(*from, 10)+`,{"encoding": "json", "maxSupportedTransactionVersion":0, "transactionDetails":"full", "commitment" :"finalized", "rewards":false}]}`), solanaWebsocketEndpoint, "POST")
+		response, err := jsonRPC([]byte(`{"jsonrpc": "2.0","id":1, "method":"getTransaction", "params": ["` + signatures.Result[k].Signature + `", {"encoding":"json", "maxSupportedTransactionVersion":0}]}`), solanaWebsocketEndpoint, "POST")
 
 		// check err
 		if err != nil {
 			return err
 		}
 
-		var block Block
-		// unrmarshal latest block slot
-		err = json.Unmarshal([]byte(response), &block)
+		var transaction Transaction
+
+		// unrmarshal transaction data
+		err = json.Unmarshal([]byte(response), &transaction)
 		if err != nil {
 			return err
 		}
 
 		// check rpc error
-		if block.Error != nil {
-			// check if the given slot was skipped if so we jump over it and continue processing blocks from the next slot
-			if block.Error.Code == slotWasSkippedErrorCode {
-				*from++
-				continue
-			}
-			return errors.New(block.Error.Message)
+		if transaction.Error != nil {
+			return errors.New(transaction.Error.Message)
 		}
 
 		// get eth logs from block
-		ethlogs, err := getEthLogsFromBlock(&block, from, log, solanaWebsocketEndpoint)
+		ethlogs, err := getEthLogsFromTransaction(&transaction, indexes, log, solanaWebsocketEndpoint)
 		if err != nil {
 			return err
 		}
@@ -187,11 +199,9 @@ func processBlockLogs(ctx *context.Context, solanaWebsocketEndpoint string, log 
 				return err
 			}
 
+			fmt.Println(string(clientResponse))
 			logsSource <- clientResponse
 		}
-
-		// move to next block
-		*from++
 	}
 
 	return nil
@@ -201,45 +211,59 @@ func processBlockLogs(ctx *context.Context, solanaWebsocketEndpoint string, log 
 For each given solana transaction signature we request the whole transaction object
 from which we parse instruction data where eth transaction parameters (including logs) are stored
 */
-func getEthLogsFromBlock(block *Block, blockNumber *uint64, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
+func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
 	// create response array of logs
 	ethLogs := make([]EthLog, 0)
 
-	// define log index value
-	var logIndex int
-	var transactionIndex int
+	// check if transaction failed
+	if transaction.Result.Meta.Err != nil {
+		// update tx index
+		inds := indexes[transaction.Result.Slot]
+		inds.transactionIndex++
+		return ethLogs, nil
+	}
 
-	// process each transaction logs separately
-	for k := len(block.Result.Transactions) - 1; k >= 0; k-- {
-		// declare log instance to fill
-		var ethLog EthLog
-		// fill initial log values
-		ethLog.BlockHash = utils.Base58stringToHex(block.Result.Blockhash)
-		ethLog.BlockNumber = fmt.Sprintf("0x%x", int(*blockNumber))
-		ethLog.TransactionIndex = fmt.Sprintf("0x%x", transactionIndex)
-		// parse events from solana transaction logs
-		events, err := GetEvents(block.Result.Transactions[k].Meta.LogMessages, &logIndex, log, solanaWebsocketEndpoint)
-		if err != nil {
-			return nil, err
-		}
+	// declare log instance to fill
+	var ethLog EthLog
+	var err error
 
-		// if we have eth transaction increase index
-		if len(events) != 0 {
-			transactionIndex++
-		}
+	// fill initial log values
+	ethLog.BlockHash, err = GetBlockHash(transaction.Result.Slot, solanaWebsocketEndpoint)
+	if err != nil {
+		return nil, err
+	}
 
-		// fill events
-		for _, event := range events {
-			ethLog.Address = event.Address
-			ethLog.TransactionHash = event.TransactionHash
-			ethLog.Data = event.Data
-			ethLog.LogIndex = event.LogIndex
-			// increment index for the next log/event
-			ethLog.Topics = event.Topics
+	ethLog.BlockNumber = fmt.Sprintf("0x%x", transaction.Result.Slot)
+	ethLog.TransactionIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].transactionIndex)
 
-			// append new log
-			ethLogs = append(ethLogs, ethLog)
-		}
+	// update tx index
+	inds := indexes[transaction.Result.Slot]
+	inds.transactionIndex++
+	indexes[transaction.Result.Slot] = inds
+
+	// parse events from solana transaction logs
+	events, err := GetEvents(transaction.Result.Meta.LogMessages, log, solanaWebsocketEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	// fill events
+	for _, event := range events {
+		ethLog.Address = event.Address
+		ethLog.TransactionHash = event.TransactionHash
+		ethLog.Data = event.Data
+		ethLog.LogIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].logIndex)
+
+		// update log index
+		inds := indexes[transaction.Result.Slot]
+		inds.logIndex++
+		indexes[transaction.Result.Slot] = inds
+
+		// increment index for the next log/event
+		ethLog.Topics = event.Topics
+
+		// append new log
+		ethLogs = append(ethLogs, ethLog)
 	}
 
 	// given log messages from solaan tx we parse eth logs
@@ -321,6 +345,66 @@ func DecodeNeonTxGas(dataList []string) (*NeonLogTxIx, error) {
 	return &NeonLogTxIx{gasUsed: int(gasUsedInt.Int64()), totalGasUsed: int(totalGasUsedInt.Int64())}, nil
 }
 
+// Decode enter call from logs
+func DecodeNeonTxEnter(dataList []string) (*NeonLogTxEvent, error) {
+	// data list must have 2 elements
+	if len(dataList) != 2 {
+		return nil, errors.New("Failed to decode enter event, it should contain 2 elements")
+	}
+
+	// decode address
+	address := utils.Base64stringToBytes(dataList[1])
+	if len(address) != 20 {
+		return nil, errors.New("Failed to decode enter event, address has wrong length")
+	}
+
+	// decode call type
+	typeName := utils.Base64stringDecodeToString(dataList[0])
+
+	// check call type
+	switch {
+	case typeName == "CALL":
+		return &NeonLogTxEvent{eventType: EnterCall, address: address}, nil
+	case typeName == "CALLCODE":
+		return &NeonLogTxEvent{eventType: EnterCall, address: address}, nil
+	case typeName == "STATICCALL":
+		return &NeonLogTxEvent{eventType: EnterStaticCall, address: address}, nil
+	case typeName == "DELEGATECALL":
+		return &NeonLogTxEvent{eventType: EnterDelegateCall, address: address}, nil
+	case typeName == "CREATE":
+		return &NeonLogTxEvent{eventType: EnterCreate, address: address}, nil
+	case typeName == "CREATE2":
+		return &NeonLogTxEvent{eventType: EnterCreate2, address: address}, nil
+	default:
+		return nil, errors.New("Failed to decode enter event, wrong type")
+	}
+}
+
+// decode exit code of eth function call
+func DecodeNeonTxExit(dataList []string) (*NeonLogTxEvent, error) {
+	// data list must have 1 elements
+	if len(dataList) != 1 {
+		return nil, errors.New("Failed to decode exit event, it should contain 1 element")
+	}
+
+	// decode call type
+	typeName := utils.Base64stringDecodeToString(dataList[0])
+
+	// check call type
+	switch {
+	case typeName == "STOP":
+		return &NeonLogTxEvent{eventType: ExitStop}, nil
+	case typeName == "RETURN":
+		return &NeonLogTxEvent{eventType: ExitReturn}, nil
+	case typeName == "SELFDESTRUCT":
+		return &NeonLogTxEvent{eventType: ExitSelfDestruct}, nil
+	case typeName == "REVERT":
+		return &NeonLogTxEvent{eventType: ExitRevert}, nil
+	default:
+		return nil, errors.New("Failed to decode exit event, wrong type")
+	}
+}
+
 // decodes transaction event, returning address, topic list and data
 func DecodeNeonTxEvent(logNum int, dataList []string) (*NeonLogTxEvent, error) {
 	// declare return data
@@ -347,6 +431,7 @@ func DecodeNeonTxEvent(logNum int, dataList []string) (*NeonLogTxEvent, error) {
 
 	// decode address from data list
 	neonLogTxEvent.address = utils.Base64stringToBytes(dataList[0])
+	neonLogTxEvent.eventType = Log
 
 	// decode each topic and insert into event data
 	for k := 0; k < int(topicCount.Int64()); k++ {
@@ -362,7 +447,7 @@ func DecodeNeonTxEvent(logNum int, dataList []string) (*NeonLogTxEvent, error) {
 }
 
 // parses solana tx log messages and builds eth events
-func GetEvents(logMessages []string, logIndex *int, log logger.Logger, solanaWebsocketEndpoint string) ([]Event, error) {
+func GetEvents(logMessages []string, log logger.Logger, solanaWebsocketEndpoint string) ([]Event, error) {
 	events := make([]Event, 0)
 	// for parsing eth transaction hash
 	var neonTxHash []byte
@@ -411,6 +496,22 @@ func GetEvents(logMessages []string, logIndex *int, log logger.Logger, solanaWeb
 			} else {
 				return nil, errors.New("transaction GAS encountered twice")
 			}
+		case name == "ENTER":
+			// decode eth event log
+			neonTxEvent, err := DecodeNeonTxEnter(dataList)
+			if err != nil {
+				return nil, err
+			}
+			// add new log to client response data
+			neonTxEventList = append(neonTxEventList, *neonTxEvent)
+		case name == "EXIT":
+			// decode eth event log
+			neonTxEvent, err := DecodeNeonTxExit(dataList)
+			if err != nil {
+				return nil, err
+			}
+			// add new log to client response data
+			neonTxEventList = append(neonTxEventList, *neonTxEvent)
 		case len(name) >= 3 && name[0:3] == "LOG":
 			logNum, err := strconv.Atoi(name[3:])
 			if err != nil {
@@ -431,11 +532,45 @@ func GetEvents(logMessages []string, logIndex *int, log logger.Logger, solanaWeb
 	// loop through all the events from logs and only return contract event logs
 	for _, e := range neonTxEventList {
 		// set event field values
-		events = append(events, Event{Address: "0x" + hex.EncodeToString(e.address), Data: "0x" + hex.EncodeToString(e.data), LogIndex: fmt.Sprintf("0x%x", *logIndex), Topics: e.topicList, TransactionHash: "0x" + hex.EncodeToString(neonTxHash)})
-
-		// increase global counter for log index
-		*logIndex++
+		events = append(events, Event{Address: "0x" + hex.EncodeToString(e.address), Data: "0x" + hex.EncodeToString(e.data), Topics: e.topicList, TransactionHash: "0x" + hex.EncodeToString(neonTxHash)})
 	}
 
 	return events, nil
+}
+
+func GetBlockHash(slot int, solanaWebsocketEndpoint string) (string, error) {
+	// get block with given slot
+	response, err := jsonRPC([]byte(`{
+		"jsonrpc": "2.0","id":1,
+		"method":"getBlock",
+		"params": [
+			`+strconv.FormatUint(uint64(slot), 10)+`,
+			{
+				"encoding": "json",
+				"maxSupportedTransactionVersion":0,
+				"transactionDetails":"none", "commitment" :"finalized",
+				"rewards":false
+			}
+		]
+	}`), solanaWebsocketEndpoint, "POST")
+
+	// check err
+	if err != nil {
+		return "", err
+	}
+
+	var blockHeader BlockHeader
+
+	// unrmarshal latest block slot
+	err = json.Unmarshal([]byte(response), &blockHeader)
+	if err != nil {
+		return "", err
+	}
+
+	// check rpc error
+	if blockHeader.Error != nil {
+		return "", errors.New(blockHeader.Error.Message)
+	}
+
+	return utils.Base58stringToHex(blockHeader.Result.Blockhash), nil
 }

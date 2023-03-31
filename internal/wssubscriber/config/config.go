@@ -27,7 +27,7 @@ func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
 	}
 
 	evmAddr := os.Getenv(evmAddress)
-	if len(endpoint) == 0 {
+	if len(evmAddr) == 0 {
 		return nil, errors.New(evmAddress + " env variable not set")
 	}
 
