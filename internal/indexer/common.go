@@ -1,14 +1,13 @@
 package indexer
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func InsertBatchImpl(indexerDB DBInterface, db *sql.DB, pCounter prometheus.Counter, data []map[string]string) (int64, error) {
+func InsertBatchImpl(indexerDB DBInterface, pCounter prometheus.Counter, data []map[string]string) (int64, error) {
 	colums := indexerDB.GetColums()
 	sqlStr := fmt.Sprintf("INSERT INTO %s(%s) VALUES ", indexerDB.GetTableName(), strings.Join(colums, ", "))
 	vals := []interface{}{}
@@ -25,7 +24,7 @@ func InsertBatchImpl(indexerDB DBInterface, db *sql.DB, pCounter prometheus.Coun
 	}
 	// trim the last `,`
 	sqlStr = sqlStr[0 : len(sqlStr)-1]
-	stmt, err := db.Prepare(sqlStr)
+	stmt, err := indexerDB.GetDB().Prepare(sqlStr)
 	if err != nil {
 		return 0, err
 	}

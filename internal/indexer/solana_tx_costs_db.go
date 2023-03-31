@@ -29,5 +29,9 @@ func (s SolanaTxCostsDB) GetTableName() string {
 }
 
 func (s SolanaTxCostsDB) InsertBatch(data []map[string]string) (int64, error) {
-	return InsertBatchImpl(s, s.db, solanaTxCostsInsertedCounter, data)
+	return InsertBatchImpl(s, solanaTxCostsInsertedCounter, data)
+}
+
+func (s SolanaTxCostsDB) GetDB() *sql.DB {
+	return s.db
 }

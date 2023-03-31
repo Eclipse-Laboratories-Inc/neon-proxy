@@ -29,5 +29,9 @@ func (s SolanaBlocksDB) GetTableName() string {
 }
 
 func (s SolanaBlocksDB) InsertBatch(data []map[string]string) (int64, error) {
-	return InsertBatchImpl(s, s.db, solanaBlocksInsertedCounter, data)
+	return InsertBatchImpl(s, solanaBlocksInsertedCounter, data)
+}
+
+func (s SolanaBlocksDB) GetDB() *sql.DB {
+	return s.db
 }

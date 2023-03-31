@@ -32,5 +32,9 @@ func (s SolanaNeonTxDB) GetTableName() string {
 }
 
 func (s SolanaNeonTxDB) InsertBatch(data []map[string]string) (int64, error) {
-	return InsertBatchImpl(s, s.db, solanaNeonTxInsertedCounter, data)
+	return InsertBatchImpl(s, solanaNeonTxInsertedCounter, data)
+}
+
+func (s SolanaNeonTxDB) GetDB() *sql.DB {
+	return s.db
 }

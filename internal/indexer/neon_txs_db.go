@@ -33,5 +33,9 @@ func (n NeonTxsDB) GetTableName() string {
 }
 
 func (s NeonTxsDB) InsertBatch(data []map[string]string) (int64, error) {
-	return InsertBatchImpl(s, s.db, neonTxInsertedCounter, data)
+	return InsertBatchImpl(s, neonTxInsertedCounter, data)
+}
+
+func (s NeonTxsDB) GetDB() *sql.DB {
+	return s.db
 }

@@ -19,3 +19,7 @@ func (s SolanaSignsDB) GetTableName() string {
 func (s SolanaSignsDB) InsertBatch(_ []map[string]string) (int64, error) {
 	return 0, nil
 }
+
+func (s SolanaSignsDB) GetDB() *sql.DB {
+	return s.db
+}
