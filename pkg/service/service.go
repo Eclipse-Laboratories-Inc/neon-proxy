@@ -303,3 +303,7 @@ func (s *Service) GetDB(name string) (*postgres.Connector, error) {
 	// here you can get any DB from any DBManager (postgress, clickhouse, mysql...)
 	return s.dbManager.GetPostgresManager().GetDB(name)
 }
+
+func (s *Service) GetPool(name string) (*postgres.PoolConnector, error) {
+	return s.dbManager.GetPostgresManager().getPoolConnector(name)
+}

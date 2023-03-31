@@ -30,7 +30,13 @@ func runIndexer(s *service.Service) {
 	if err != nil {
 		panic(err)
 	}
-	db := indexerDB.GetRawDB()
-	app := indexer.NewIndexerApp(s.GetContext(), s.GetLogger(), db)
+	/*
+		// add PoolConnector to the indexer
+		indexerPool, err := s.GetPool(indexerServiceName)
+		if err != nil {
+			panic(err)
+		}
+	*/
+	app := indexer.NewIndexerApp(s.GetContext(), s.GetLogger(), indexerDB.GetRawDB())
 	app.Run()
 }

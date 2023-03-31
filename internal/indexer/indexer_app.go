@@ -8,9 +8,10 @@ import (
 )
 
 type IndexerApp struct {
-	ctx    context.Context
-	logger logger.Logger
-	db     *IndexerDB
+	ctx       context.Context
+	logger    logger.Logger
+	db        *IndexerDB
+	collector *Collector
 }
 
 func NewIndexerApp(ctx context.Context, log logger.Logger, db *sql.DB) *IndexerApp {
