@@ -597,6 +597,7 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 				return nil, err
 			}
 			// add new log to client response data
+			neonTxEvent.transactionHash = neonTxHash
 			neonTxEventList = append(neonTxEventList, *neonTxEvent)
 		case name == "EXIT":
 			// decode eth event log
@@ -605,6 +606,7 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 				return nil, err
 			}
 			// add new log to client response data
+			neonTxEvent.transactionHash = neonTxHash
 			neonTxEventList = append(neonTxEventList, *neonTxEvent)
 		case len(name) >= 3 && name[0:3] == "LOG":
 			logNum, err := strconv.Atoi(name[3:])
@@ -617,6 +619,7 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 				return nil, err
 			}
 			// add new log to client response data
+			neonTxEvent.transactionHash = neonTxHash
 			neonTxEventList = append(neonTxEventList, *neonTxEvent)
 		default:
 			continue
