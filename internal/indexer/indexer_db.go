@@ -10,6 +10,7 @@ type IndexerDB struct {
 	solanaTxCostsDB *SolanaTxCostsDB
 	neonTxLogsDB    *NeonTxLogsDB
 	neonTxsDB       *NeonTxsDB
+	constantsDB     *ConstantsDB
 }
 
 func (db *IndexerDB) Init(sdb *sql.DB) {
@@ -19,6 +20,7 @@ func (db *IndexerDB) Init(sdb *sql.DB) {
 	db.solanaTxCostsDB = &SolanaTxCostsDB{db: sdb}
 	db.neonTxLogsDB = &NeonTxLogsDB{db: sdb}
 	db.neonTxsDB = &NeonTxsDB{db: sdb}
+	db.constantsDB = &ConstantsDB{db: sdb}
 }
 
 func (db *IndexerDB) IsHealthy() bool              { return true }
