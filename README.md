@@ -29,6 +29,7 @@ make run-indexer
 ### Environment setup for WSSubscriber
 <div class="highlight highlight-source-shell"><pre>
 SOLANA_RPC_ENDPOINT=https://api.devnet.solana.com
+EVM_ADDRESS=eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU
 </pre></div>
 <div class="highlight highlight-source-shell"><pre>
 go run cmd/neon-wssubscriber/main.go

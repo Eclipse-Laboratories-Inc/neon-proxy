@@ -39,20 +39,26 @@ const (
 	// result codes
 	Return = 300
 	Cancel = 301
+
+	// prepare logs for checking evm enter/exit points
+	EvmInvocationLog        = "Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU invoke"
+	EvmInvocationSuccessEnd = "Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU success"
+	EvmInvocationFailEnd    = "Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU fail"
 )
 
 // eth event log data parsed from solaan logs
 type NeonLogTxEvent struct {
-	eventType int
-	address   []byte
-	topicList []string
-	data      []byte
+	eventType       int
+	transactionHash []byte
+	address         []byte
+	topicList       []string
+	data            []byte
 }
 
 // current log and transaction index
 type Indexes struct {
 	transactionIndex int
-	logIndex int
+	logIndex         int
 }
 
 // eth event structure
@@ -115,7 +121,7 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 			}
 
 			// get latest block number
-			signaturesResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method": "getSignaturesForAddress", "params":["` + evmAddress + `",{"commitment":"finalized" ` + untilParameter + `}]}`), solanaWebsocketEndpoint, "POST")
+			signaturesResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method": "getSignaturesForAddress", "params":["`+evmAddress+`",{"commitment":"finalized" `+untilParameter+`}]}`), solanaWebsocketEndpoint, "POST")
 			if err != nil {
 				log.Error().Err(err).Msg("Error on rpc call for checking the latest slot on chain")
 				logsSourceError <- err
@@ -163,7 +169,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 	// process each block sequentially, broadcasting to peers
 	for k := len(signatures.Result) - 1; k >= 0; k-- {
 		// get block with given slot
-		response, err := jsonRPC([]byte(`{"jsonrpc": "2.0","id":1, "method":"getTransaction", "params": ["` + signatures.Result[k].Signature + `", {"encoding":"json", "maxSupportedTransactionVersion":0}]}`), solanaWebsocketEndpoint, "POST")
+		response, err := jsonRPC([]byte(`{"jsonrpc": "2.0","id":1, "method":"getTransaction", "params": ["`+signatures.Result[k].Signature+`", {"encoding":"json", "maxSupportedTransactionVersion":0}]}`), solanaWebsocketEndpoint, "POST")
 
 		// check err
 		if err != nil {
@@ -280,6 +286,26 @@ func decodeMnemonic(line string) (string, []string) {
 
 	// return line function and remaining data
 	return utils.Base64stringDecodeToString(words[2]), words[3:]
+}
+
+// decode some non-evm program enter sites
+func isNonEvmProgramInvoke(line string) bool {
+	// split line into separate instruction words
+	words := strings.Fields(line)
+	if len(words) == 4 && words[0] == "Program" && words[2] == "invoke" && words[3][0] == '[' {
+		return true
+	}
+	return false
+}
+
+// decode some non-evm program exit sites
+func isNonEvmProgramExit(line string) bool {
+	// split line into separate instruction words
+	words := strings.Fields(line)
+	if len(words) >= 3 && words[0] == "Program" && (words[2] == "success" || (len(words[2]) >=4 && words[2][0:4] == "fail")) {
+		return true
+	}
+	return false
 }
 
 // Decode eth transaction hash from solana logs
@@ -448,7 +474,55 @@ func DecodeNeonTxEvent(logNum int, dataList []string) (*NeonLogTxEvent, error) {
 
 // parses solana tx log messages and builds eth events
 func GetEvents(logMessages []string, log logger.Logger, solanaWebsocketEndpoint string) ([]Event, error) {
+	//final slice of eth event logs from program logs
 	events := make([]Event, 0)
+	ethEvents := make([]NeonLogTxEvent, 0)
+	// find the call to evm program in the logs
+	var k int
+	for k < len(logMessages) {
+		// check if the log indicates call to evm program
+		if len(logMessages[k]) >= len(EvmInvocationLog) && logMessages[k][0:len(EvmInvocationLog)] == EvmInvocationLog {
+			evmProgramStartIndex := k + 1
+			k++
+			// find the end of the evm program call
+			for {
+				// check if we find evm program end, if that call succeeded we parse logs inside the segment
+				if len(logMessages[k]) >= len(EvmInvocationSuccessEnd) && logMessages[k][0:len(EvmInvocationSuccessEnd)] == EvmInvocationSuccessEnd {
+					eventLogs, err := parseLogs(logMessages[evmProgramStartIndex:k], log, solanaWebsocketEndpoint)
+					if err != nil {
+						return nil, err
+					}
+
+					// append newly parsed logs
+					ethEvents = append(ethEvents, eventLogs...)
+					k++
+					break
+				}
+
+				// check if we find evm program end, if that call failed we skip any logs inside the segment
+				if len(logMessages[k]) >= len(EvmInvocationFailEnd) && logMessages[k][0:len(EvmInvocationFailEnd)] == EvmInvocationFailEnd {
+					k++
+					break
+				}
+
+				k++
+			}
+		} else {
+			k++
+		}
+	}
+
+	// loop through all the events from logs and only return contract event logs
+	for _, e := range ethEvents {
+		// set event field values
+		events = append(events, Event{Address: "0x" + hex.EncodeToString(e.address), Data: "0x" + hex.EncodeToString(e.data), Topics: e.topicList, TransactionHash: "0x" + hex.EncodeToString(e.transactionHash)})
+	}
+
+	return events, nil
+}
+
+// parses logs from evm invocation segment in logs
+func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint string) ([]NeonLogTxEvent, error) {
 	// for parsing eth transaction hash
 	var neonTxHash []byte
 	// for parsed gas usage data
@@ -457,10 +531,30 @@ func GetEvents(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 	var neonTxReturn *NeonLogTxReturn
 	// error decoding logs
 	var err error
+	// we encounter non evm calls inside evm call segment so we remember the current depth of such calls
+	var callDepth int
+
 	neonTxEventList := make([]NeonLogTxEvent, 0)
 
 	// for each solana transaction log message decode eth data
 	for _, line := range logMessages {
+		// check if some non-evm program is called
+		if isNonEvmProgramInvoke(line) {
+			callDepth++
+			continue
+		}
+
+		// check if some non-evm program exited here
+		if isNonEvmProgramExit(line) {
+			callDepth--
+			continue
+		}
+
+		// if we are inside some other program's logs then skip those
+		if callDepth != 0 {
+			continue
+		}
+
 		// decode log line
 		name, dataList := decodeMnemonic(line)
 		if len(name) == 0 {
@@ -529,13 +623,7 @@ func GetEvents(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 		}
 	}
 
-	// loop through all the events from logs and only return contract event logs
-	for _, e := range neonTxEventList {
-		// set event field values
-		events = append(events, Event{Address: "0x" + hex.EncodeToString(e.address), Data: "0x" + hex.EncodeToString(e.data), Topics: e.topicList, TransactionHash: "0x" + hex.EncodeToString(neonTxHash)})
-	}
-
-	return events, nil
+	return neonTxEventList, nil
 }
 
 func GetBlockHash(slot int, solanaWebsocketEndpoint string) (string, error) {
