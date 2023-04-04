@@ -618,7 +618,7 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 					neonTxEventList = neonTxEventList[:len(neonTxEventList)-1]
 				}
 			}
-			
+
 			// as we exit specific call depth decrease call depth level
 			evmCallDepth--
 		case len(name) >= 3 && name[0:3] == "LOG":
@@ -638,6 +638,11 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 		default:
 			continue
 		}
+	}
+
+	// if the call stack is not finished skip tx
+	if evmCallDepth != 0 || nonEvmCallDepth != 0 {
+		return nil, nil
 	}
 
 	return neonTxEventList, nil

@@ -67,7 +67,7 @@ type Client struct {
 	newLogsLocker         sync.Mutex
 	newLogsIsActive       bool
 	newLogsSubscriptionID string
-	logsFilters           logsFilters
+	logsFilters           *logsFilters
 }
 
 // json object sent back to the client
