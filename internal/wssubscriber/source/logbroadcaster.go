@@ -53,6 +53,7 @@ type NeonLogTxEvent struct {
 	address         []byte
 	topicList       []string
 	data            []byte
+	callLevel       int
 }
 
 // current log and transaction index
@@ -532,7 +533,9 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 	// error decoding logs
 	var err error
 	// we encounter non evm calls inside evm call segment so we remember the current depth of such calls
-	var callDepth int
+	var nonEvmCallDepth int
+	// if we encounter enter instruction we increase call depth of evm contract
+	var evmCallDepth int
 
 	neonTxEventList := make([]NeonLogTxEvent, 0)
 
@@ -540,18 +543,18 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 	for _, line := range logMessages {
 		// check if some non-evm program is called
 		if isNonEvmProgramInvoke(line) {
-			callDepth++
+			nonEvmCallDepth++
 			continue
 		}
 
 		// check if some non-evm program exited here
 		if isNonEvmProgramExit(line) {
-			callDepth--
+			nonEvmCallDepth--
 			continue
 		}
 
 		// if we are inside some other program's logs then skip those
-		if callDepth != 0 {
+		if nonEvmCallDepth != 0 {
 			continue
 		}
 
@@ -578,6 +581,10 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 				if err != nil {
 					return nil, err
 				}
+				// check transaction final status
+				if neonTxReturn.status != 0 {
+					return nil, nil
+				}
 			} else {
 				return nil, errors.New("transaction RETURN encountered twice")
 			}
@@ -592,22 +599,28 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 			}
 		case name == "ENTER":
 			// decode eth event log
-			neonTxEvent, err := DecodeNeonTxEnter(dataList)
+			_, err := DecodeNeonTxEnter(dataList)
 			if err != nil {
 				return nil, err
 			}
-			// add new log to client response data
-			neonTxEvent.transactionHash = neonTxHash
-			neonTxEventList = append(neonTxEventList, *neonTxEvent)
+			// increase call depth
+			evmCallDepth++
 		case name == "EXIT":
 			// decode eth event log
 			neonTxEvent, err := DecodeNeonTxExit(dataList)
 			if err != nil {
 				return nil, err
 			}
-			// add new log to client response data
-			neonTxEvent.transactionHash = neonTxHash
-			neonTxEventList = append(neonTxEventList, *neonTxEvent)
+
+			// if the segment reverted remove those logs
+			if neonTxEvent.eventType == ExitRevert {
+				for len(neonTxEventList) != 0 && neonTxEventList[len(neonTxEventList) - 1].callLevel == evmCallDepth {
+					neonTxEventList = neonTxEventList[:len(neonTxEventList)-1]
+				}
+			}
+			
+			// as we exit specific call depth decrease call depth level
+			evmCallDepth--
 		case len(name) >= 3 && name[0:3] == "LOG":
 			logNum, err := strconv.Atoi(name[3:])
 			if err != nil {
@@ -620,6 +633,7 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 			}
 			// add new log to client response data
 			neonTxEvent.transactionHash = neonTxHash
+			neonTxEvent.callLevel = evmCallDepth
 			neonTxEventList = append(neonTxEventList, *neonTxEvent)
 		default:
 			continue
