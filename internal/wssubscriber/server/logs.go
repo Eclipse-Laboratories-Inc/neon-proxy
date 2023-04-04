@@ -20,13 +20,15 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 		return
 	}
 
-	params, ok := requestRPC.Params[1].(SubscribeLogsFilterParams)
-	if !ok {
-		responseRPC.Error = "newLogs subscription accepts filters only bu addresses and topics"
-		return
-	}
+	if len(requestRPC.Params) > 1 {
+		params, ok := requestRPC.Params[1].(SubscribeLogsFilterParams)
+		if !ok {
+			responseRPC.Error = "newLogs subscription accepts filters only bu addresses and topics"
+			return
+		}
 
-	c.buildFilters(params)
+		c.buildFilters(params)
+	}
 
 	// if not subscribe to broadcaster
 	c.newLogsSource = c.newLogsBroadcaster.Subscribe()
@@ -43,7 +45,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 }
 
 func (c *Client) buildFilters(params SubscribeLogsFilterParams) {
-	c.logsFilters = logsFilters{
+	c.logsFilters = &logsFilters{
 		Addresses: make(map[string]struct{}),
 		Topics:    make(map[string]struct{}),
 	}
@@ -81,13 +83,17 @@ func (c *Client) CollectNewLogs() {
 			clientResponse.Method = methodSubscriptionName
 			clientResponse.Params.Subscription = c.newLogsSubscriptionID
 
-			logs, err := c.FilterLogs(newLogs.([]byte))
-			if err != nil {
-				c.log.Error().Err(err).Msg(fmt.Sprintf("filter logs output: %v", err))
-				c.newLogsLocker.Unlock()
-				return
+			if c.logsFilters != nil {
+				logs, err := c.FilterLogs(newLogs.([]byte))
+				if err != nil {
+					c.log.Error().Err(err).Msg(fmt.Sprintf("filter logs output: %v", err))
+					c.newLogsLocker.Unlock()
+					return
+				} else {
+					clientResponse.Params.Result = logs
+				}
 			} else {
-				clientResponse.Params.Result = logs
+				clientResponse.Params.Result = newLogs.([]byte)
 			}
 
 			c.newLogsLocker.Unlock()
