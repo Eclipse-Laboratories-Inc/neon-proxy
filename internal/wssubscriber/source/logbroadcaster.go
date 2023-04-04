@@ -195,6 +195,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 		if err != nil {
 			return err
 		}
+
 		// marshall each log and push into broadcaster
 		for _, ethLog := range ethlogs {
 			// insert new log to be broadcasted
@@ -241,18 +242,19 @@ func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes
 	}
 
 	ethLog.BlockNumber = fmt.Sprintf("0x%x", transaction.Result.Slot)
-	ethLog.TransactionIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].transactionIndex)
-
-	// update tx index
-	inds := indexes[transaction.Result.Slot]
-	inds.transactionIndex++
-	indexes[transaction.Result.Slot] = inds
 
 	// parse events from solana transaction logs
-	events, err := GetEvents(transaction.Result.Meta.LogMessages, log, solanaWebsocketEndpoint)
+	events, err := GetEvents(transaction.Result.Meta.LogMessages)
 	if err != nil {
 		return nil, err
 	}
+
+	ethLog.TransactionIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].transactionIndex)
+
+	// update tx index
+	txinds := indexes[transaction.Result.Slot]
+	txinds.transactionIndex++
+	indexes[transaction.Result.Slot] = txinds
 
 	// fill events
 	for _, event := range events {
@@ -340,7 +342,7 @@ func DecodeNeonTxReturn(neonTxIx *NeonLogTxIx, dataList []string) (*NeonLogTxRet
 	}
 
 	// set exit code
-	if exitStatus < 0xd0 {
+	if exitStatus > 0xd0 {
 		exitStatus = 0x1
 	} else {
 		exitStatus = 0x0
@@ -474,7 +476,7 @@ func DecodeNeonTxEvent(logNum int, dataList []string) (*NeonLogTxEvent, error) {
 }
 
 // parses solana tx log messages and builds eth events
-func GetEvents(logMessages []string, log logger.Logger, solanaWebsocketEndpoint string) ([]Event, error) {
+func GetEvents(logMessages []string) ([]Event, error) {
 	//final slice of eth event logs from program logs
 	events := make([]Event, 0)
 	ethEvents := make([]NeonLogTxEvent, 0)
@@ -489,7 +491,7 @@ func GetEvents(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 			for {
 				// check if we find evm program end, if that call succeeded we parse logs inside the segment
 				if len(logMessages[k]) >= len(EvmInvocationSuccessEnd) && logMessages[k][0:len(EvmInvocationSuccessEnd)] == EvmInvocationSuccessEnd {
-					eventLogs, err := parseLogs(logMessages[evmProgramStartIndex:k], log, solanaWebsocketEndpoint)
+					eventLogs, err := parseLogs(logMessages[evmProgramStartIndex:k])
 					if err != nil {
 						return nil, err
 					}
@@ -523,7 +525,7 @@ func GetEvents(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 }
 
 // parses logs from evm invocation segment in logs
-func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint string) ([]NeonLogTxEvent, error) {
+func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 	// for parsing eth transaction hash
 	var neonTxHash []byte
 	// for parsed gas usage data
@@ -583,7 +585,7 @@ func parseLogs(logMessages []string, log logger.Logger, solanaWebsocketEndpoint 
 				}
 				// check transaction final status
 				if neonTxReturn.status != 0 {
-					return nil, nil
+					return nil, errors.New("return status not ok")
 				}
 			} else {
 				return nil, errors.New("transaction RETURN encountered twice")
