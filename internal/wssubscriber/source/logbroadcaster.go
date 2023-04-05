@@ -93,7 +93,7 @@ type NeonLogTxReturn struct {
 
 // RegisterLogsBroadcasterSources passes data and error channels where new incoming data (transaction logs) will be pushed and redirected to broadcaster
 func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint, evmAddress string, broadcaster *broadcaster.Broadcaster) error {
-	log.Info().Msg("logs pulling from blocks started ... ")
+	log.Info().Msg("logs pulling from evm address started ... ")
 
 	// declare sources to be set
 	logsSource := make(chan interface{})
@@ -207,7 +207,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 				return err
 			}
 
-			fmt.Println(string(clientResponse))
+			// broadcast contract event log
 			logsSource <- clientResponse
 		}
 	}
@@ -236,11 +236,13 @@ func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes
 	var err error
 
 	// fill initial log values
+	//NOTE can be optimized by caching the block hashes
 	ethLog.BlockHash, err = GetBlockHash(transaction.Result.Slot, solanaWebsocketEndpoint)
 	if err != nil {
 		return nil, err
 	}
 
+	// set block hash
 	ethLog.BlockNumber = fmt.Sprintf("0x%x", transaction.Result.Slot)
 
 	// parse events from solana transaction logs
@@ -249,6 +251,12 @@ func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes
 		return nil, err
 	}
 
+	// skip this tx
+	if events == nil {
+		return ethLogs, nil
+	}
+
+	// set next tx index
 	ethLog.TransactionIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].transactionIndex)
 
 	// update tx index
@@ -644,6 +652,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 
 	// if the call stack is not finished skip tx
 	if evmCallDepth != 0 || nonEvmCallDepth != 0 {
+		fmt.Println(logMessages)
 		return nil, nil
 	}
 
