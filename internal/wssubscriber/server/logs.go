@@ -3,10 +3,19 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/source"
+	"github.com/pkg/errors"
 	"regexp"
+	"strings"
 
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/source"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
+)
+
+var (
+	ErrLogFilterInvalidDataTypes    = errors.New("invalid log filter: data types must start with 0x")
+	ErrLogFilterInvalidTopicsString = errors.New("invalid log filter: invalid field topics: string")
+	ErrLogFilterInvalidTopicsNumber = errors.New("invalid log filter: invalid field topics: number")
+	ErrLogFilterInvalidHexCharacter = errors.New("invalid log filter: invalid hex string, invalid character")
 )
 
 // to be implemented
@@ -36,7 +45,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 		}
 
 		if err := c.buildFilters(filterParams); err != nil {
-			responseRPC.Error = fmt.Sprintf("failed to set up log filters: %v", err)
+			responseRPC.Error = err.Error()
 			return
 		}
 	}
@@ -55,30 +64,62 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 	go c.CollectNewLogs()
 }
 
-func isHexNumber(str string) bool {
-	hexPattern := "^0[xX][0-9a-fA-F]*$"
-	regex := regexp.MustCompile(hexPattern)
-	return regex.MatchString(str)
-}
-
 func (c *Client) buildFilters(params SubscribeLogsFilterParams) error {
-	c.logsFilters = &logsFilters{
-		Addresses: make(map[string]struct{}),
-		Topics:    make(map[string]struct{}),
-	}
+	c.logsFilters = &logsFilters{}
 
-	for i := range params.Addresses {
-		// it seems, if field "address" in log is empty, than we return "address":"0x", but user may not know it
-		// and set up filter to get logs with empty "address" field as "" or "null"
-		// if "address" isn't "" or "null", it should be presented at least as hex number
-		if params.Addresses[i] != "null" && params.Addresses[i] != "" && !isHexNumber(params.Addresses[i]) {
-			return fmt.Errorf("can't filter by %v addres, addres should be hex number", params.Addresses[i])
+	// addresses can be any type, but we set up as filter only if it's
+	// not empty string
+	switch addresses := params.Addresses.(type) {
+	case string:
+		if addresses != "" {
+			c.logsFilters.Addresses = make(map[string]struct{})
+			c.logsFilters.Addresses[addresses] = struct{}{}
 		}
-		c.logsFilters.Addresses[params.Addresses[i]] = struct{}{}
+	case []interface{}:
+		if len(addresses) > 0 {
+			c.logsFilters.Addresses = make(map[string]struct{})
+		}
+		for _, addr := range addresses {
+			switch a := addr.(type) {
+			case string:
+				if a != "" {
+					c.logsFilters.Addresses[a] = struct{}{}
+				}
+			}
+		}
 	}
 
-	for i := range params.Topics {
-		c.logsFilters.Topics[params.Topics[i]] = struct{}{}
+	// topics can be only array of strings, which have prefix "0x" and have to be
+	// longer, than 64 symbols (32 bytes)
+	topicsFormat := regexp.MustCompile(`^[0-9a-fA-F]*$`)
+	switch topics := params.Topics.(type) {
+	case string:
+		return ErrLogFilterInvalidTopicsString
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, uintptr, float32, float64:
+		return ErrLogFilterInvalidTopicsNumber
+	case []interface{}:
+		if len(topics) > 0 {
+			c.logsFilters.Topics = make(map[string]struct{})
+		}
+		for _, topic := range topics {
+			switch t := topic.(type) {
+			case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, uintptr, float32, float64:
+				return ErrLogFilterInvalidTopicsNumber
+			case string:
+				if !strings.HasPrefix(t, "0x") {
+					return ErrLogFilterInvalidDataTypes
+				}
+
+				addr := strings.Trim(t, "0x")
+				if len(addr) < 64 {
+					return fmt.Errorf("invalid log filter: data type size mismatch, expected 32, got %v", len(addr)/2)
+				}
+				if !topicsFormat.MatchString(addr) {
+					return ErrLogFilterInvalidHexCharacter
+				}
+				c.logsFilters.Topics[t] = struct{}{}
+			}
+		}
 	}
 	return nil
 }
@@ -143,7 +184,7 @@ func (c *Client) CollectNewLogs() {
 // Otherwise it checks if log contains AT LEAST 1 address from "address" filter OR AT LEAST 1 topic from "topic" filter
 func (c *Client) FilterLogs(newLog []byte) ([]byte, error) {
 	// no filters set up
-	if c.logsFilters == nil {
+	if c.logsFilters == nil || c.logsFilters.Addresses == nil && c.logsFilters.Topics == nil {
 		return newLog, nil
 	}
 
@@ -154,29 +195,15 @@ func (c *Client) FilterLogs(newLog []byte) ([]byte, error) {
 
 	filters := c.logsFilters
 
-	// check if "empty address" filter is set and log contains "0x" address, which is representation for
-	// empty address
-	_, ok1 := filters.Addresses["null"]
-	_, ok2 := filters.Addresses[""]
-	if (ok1 || ok2) && rowLog.Address == "0x" {
+	// it seems, in Ethereum filter by topics has higher priority
+	// if we send request { "id": 1, "method": "eth_subscribe", "params": [ "logs", { "addresses": ["0xc309c03e4d5065ea4a7d591fb9a4c418cb6e4812f0a768623ec9bd878fe2c829"], "topics": []}]}
+	// for subscription to Ethereum, it returns all logs with all addresses without filtering
+	if filters.Topics == nil {
 		return newLog, nil
 	}
 
-	// check if log contains address, which is set up as filter
-	_, ok := filters.Addresses[rowLog.Address]
-	if ok {
-		return newLog, nil
-	}
-
-	// check if "empty topic" filter is set and log contains no topics
-	_, ok1 = filters.Topics["null"]
-	_, ok2 = filters.Topics[""]
-	if (ok1 || ok2) && rowLog.Topics == nil {
-		return newLog, nil
-	}
-
-	// check if log contains topic, which is set up as filter
-	if rowLog.Topics != nil {
+	// check if any address filter is set up and log contains this topic
+	if filters.Topics != nil {
 		for _, topic := range rowLog.Topics {
 			_, ok := filters.Topics[topic]
 			if ok {
@@ -184,5 +211,17 @@ func (c *Client) FilterLogs(newLog []byte) ([]byte, error) {
 			}
 		}
 	}
+
+	// it seems, in Ethereum in case if we can't pass filter by topics, we return nothing,
+	// so it doesn't make sense to check filter by address
+
+	// check if any address filter is set up and log contains this address
+	/*if filters.Addresses != nil {
+		_, ok := filters.Addresses[rowLog.Address]
+		if ok {
+			return newLog, nil
+		}
+	}*/
+
 	return nil, nil
 }
