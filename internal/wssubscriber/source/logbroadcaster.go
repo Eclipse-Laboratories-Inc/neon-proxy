@@ -207,6 +207,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 				return err
 			}
 
+			fmt.Println(string(clientResponse))
 			// broadcast contract event log
 			logsSource <- clientResponse
 		}
@@ -532,6 +533,59 @@ func GetEvents(logMessages []string) ([]Event, error) {
 	return events, nil
 }
 
+func GetEnterExitCode(ind int, logMessages []string) (int, int, error) {
+	var callDepth int
+	// we encounter non evm calls inside evm call segment so we remember the current depth of such calls
+	var nonEvmCallDepth int
+	for ind = ind; ind <= len(logMessages) - 1; ind++ {
+		// check if some non-evm program is called
+		if isNonEvmProgramInvoke(logMessages[ind]) {
+			nonEvmCallDepth++
+			continue
+		}
+
+		// check if some non-evm program exited here
+		if isNonEvmProgramExit(logMessages[ind]) {
+			nonEvmCallDepth--
+			continue
+		}
+
+		// if we are inside some other program's logs then skip those
+		if nonEvmCallDepth != 0 {
+			continue
+		}
+
+		// decode log line
+		name, dataList := decodeMnemonic(logMessages[ind])
+		if len(name) == 0 {
+			continue
+		}
+
+		// Use switch on the instruction name variable.
+		switch {
+		case name == "ENTER":
+			// increase depth
+			callDepth++
+		case name == "EXIT":
+			// reduce depths
+			callDepth--
+
+			// decode eth event log
+			neonTxEvent, err := DecodeNeonTxExit(dataList)
+			if err != nil {
+				return 0, 0, err
+			}
+
+			// if we exit main call return it's exit status
+			if callDepth == 0 {
+				return neonTxEvent.eventType, ind, nil
+			}
+		}
+	}
+
+	return 0, 0, errors.New("cannot find corresponding exit status")
+}
+
 // parses logs from evm invocation segment in logs
 func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 	// for parsing eth transaction hash
@@ -550,7 +604,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 	neonTxEventList := make([]NeonLogTxEvent, 0)
 
 	// for each solana transaction log message decode eth data
-	for _, line := range logMessages {
+	for ind, line := range logMessages {
 		// check if some non-evm program is called
 		if isNonEvmProgramInvoke(line) {
 			nonEvmCallDepth++
@@ -574,7 +628,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 			continue
 		}
 
-		// Use switch on the day variable.
+		// Use switch on the instruction name variable.
 		switch {
 		case name == "HASH":
 			if neonTxHash == nil {
@@ -613,8 +667,19 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 			if err != nil {
 				return nil, err
 			}
-			// increase call depth
-			evmCallDepth++
+			// if the segment ends with revert, skip it
+			var exitCode, endingInd int
+			exitCode, endingInd, err = GetEnterExitCode(ind, logMessages);
+			// check error for unfinished enter call
+			if err != nil {
+				fmt.Println("Error on finding end of enter call")
+				continue
+			}
+
+			// omit inside segment if the segment ends with revert
+			if exitCode == ExitRevert {
+				ind = endingInd + 1
+			}
 		case name == "EXIT":
 			// decode eth event log
 			neonTxEvent, err := DecodeNeonTxExit(dataList)
@@ -622,15 +687,10 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 				return nil, err
 			}
 
-			// if the segment reverted remove those logs
+			// if the segment reverted return empty logs for the segment
 			if neonTxEvent.eventType == ExitRevert {
-				for len(neonTxEventList) != 0 && neonTxEventList[len(neonTxEventList)-1].callLevel == evmCallDepth {
-					neonTxEventList = neonTxEventList[:len(neonTxEventList)-1]
-				}
+				return nil, nil
 			}
-
-			// as we exit specific call depth decrease call depth level
-			evmCallDepth--
 		case len(name) >= 3 && name[0:3] == "LOG":
 			logNum, err := strconv.Atoi(name[3:])
 			if err != nil {
