@@ -313,7 +313,7 @@ func isNonEvmProgramInvoke(line string) bool {
 func isNonEvmProgramExit(line string) bool {
 	// split line into separate instruction words
 	words := strings.Fields(line)
-	if len(words) >= 3 && words[0] == "Program" && (words[2] == "success" || (len(words[2]) >=4 && words[2][0:4] == "fail")) {
+	if len(words) >= 3 && words[0] == "Program" && (words[2] == "success" || (len(words[2]) >= 4 && words[2][0:4] == "fail")) {
 		return true
 	}
 	return false
@@ -624,7 +624,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 
 			// if the segment reverted remove those logs
 			if neonTxEvent.eventType == ExitRevert {
-				for len(neonTxEventList) != 0 && neonTxEventList[len(neonTxEventList) - 1].callLevel == evmCallDepth {
+				for len(neonTxEventList) != 0 && neonTxEventList[len(neonTxEventList)-1].callLevel == evmCallDepth {
 					neonTxEventList = neonTxEventList[:len(neonTxEventList)-1]
 				}
 			}
