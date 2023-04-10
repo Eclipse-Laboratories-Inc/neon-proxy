@@ -8,7 +8,7 @@ import (
 const (
 	solanaRPCEndpoint = "SOLANA_RPC_ENDPOINT"
 	wssubscriberPort  = "NEON_WEBSOCKET_PORT"
-	evmAddress        = "EVM_ADDRESS"
+	EvmAddress        = "EVM_ADDRESS"
 )
 
 // declare wssubscriber configuration parameters
@@ -26,9 +26,9 @@ func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
 		return nil, errors.New(solanaRPCEndpoint + " env variable not set")
 	}
 
-	evmAddr := os.Getenv(evmAddress)
+	evmAddr := os.Getenv(EvmAddress)
 	if len(evmAddr) == 0 {
-		return nil, errors.New(evmAddress + " env variable not set")
+		return nil, errors.New(EvmAddress + " env variable not set")
 	}
 
 	// check if port is set in env

@@ -1,6 +1,7 @@
 package source
 
 import (
+	"os"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/config"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"math/big"
 	"strconv"
@@ -39,11 +41,14 @@ const (
 	// result codes
 	Return = 300
 	Cancel = 301
+)
 
+var (
 	// prepare logs for checking evm enter/exit points
-	EvmInvocationLog        = "Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU invoke"
-	EvmInvocationSuccessEnd = "Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU success"
-	EvmInvocationFailEnd    = "Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU fail"
+	EvmInvocationLog        = "Program " + os.Getenv(config.EvmAddress) + " invoke"
+	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
+	EvmInvocationFailEnd    = "Program " + os.Getenv(config.EvmAddress) + " fail"
+
 )
 
 // eth event log data parsed from solaan logs
