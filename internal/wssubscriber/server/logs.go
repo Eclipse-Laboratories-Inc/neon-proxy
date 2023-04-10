@@ -23,7 +23,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 	if len(requestRPC.Params) > 1 {
 		params, ok := requestRPC.Params[1].(SubscribeLogsFilterParams)
 		if !ok {
-			responseRPC.Error = "newLogs subscription accepts filters only bu addresses and topics"
+			responseRPC.Error = "newLogs subscription accepts filters only by addresses and topics"
 			return
 		}
 

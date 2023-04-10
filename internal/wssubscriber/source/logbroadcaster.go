@@ -652,7 +652,6 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 
 	// if the call stack is not finished skip tx
 	if evmCallDepth != 0 || nonEvmCallDepth != 0 {
-		fmt.Println(logMessages)
 		return nil, nil
 	}
 
