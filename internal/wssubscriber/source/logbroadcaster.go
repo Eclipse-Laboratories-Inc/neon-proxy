@@ -356,7 +356,7 @@ func DecodeNeonTxReturn(neonTxIx *NeonLogTxIx, dataList []string) (*NeonLogTxRet
 	}
 
 	// set exit code
-	if exitStatus > 0xd0 {
+	if exitStatus < 0xd0 {
 		exitStatus = 0x1
 	} else {
 		exitStatus = 0x0
@@ -651,7 +651,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 					return nil, err
 				}
 				// check transaction final status
-				if neonTxReturn.status != 0 {
+				if neonTxReturn.status != 1 {
 					return nil, errors.New("return status not ok")
 				}
 			} else {
@@ -675,10 +675,11 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 			// if the segment ends with revert, skip it
 			var exitCode, endingInd int
 			exitCode, endingInd, err = GetEnterExitCode(ind, logMessages);
+
 			// check error for unfinished enter call
 			if err != nil {
 				fmt.Println("Error on finding end of enter call")
-				continue
+				return nil, nil
 			}
 
 			// omit inside segment if the segment ends with revert
