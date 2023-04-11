@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'DOPS-208-Deploy-wss-subscriber-on-dev-stand'
+      - 'socket-proxy'
 
 jobs:
   build:
