@@ -49,4 +49,4 @@ jobs:
           SOLANA_RPC_ENDPOINT: ${{ vars.SOLANA_RPC_ENDPOINT }}
           EVM_ADDRESS: ${{ vars.EVM_ADDRESS }}
         run: |
-          docker-compose up -d -f docker-compose-wssubscriber.yml
+          docker-compose -f docker-compose-wssubscriber.yml up -d 
