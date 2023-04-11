@@ -7,7 +7,7 @@ on:
       - 'DOPS-208-Deploy-wss-subscriber-on-dev-stand'
 
 jobs:
-  docker:
+  build:
     runs-on: ubuntu-latest
     steps:
       -
@@ -29,3 +29,24 @@ jobs:
           push: true
           tags: neonlabsorg/neon-wssubscriber:${{ github.sha }}
           target: neon-wssubscriber
+  deploy:
+    needs: build
+    runs-on: deployer-controllers
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Change docker context
+        run: |
+          docker context use go-proxy-components
+      - name: Deploy with docker-compose
+        env:
+          TAG: ${{ github.sha }}
+          SOLANA_RPC_ENDPOINT: ${{ vars.SOLANA_RPC_ENDPOINT }}
+          EVM_ADDRESS: ${{ vars.EVM_ADDRESS }}
+        run: |
+          docker-compose up -d
