@@ -8,6 +8,9 @@ services:
       EVM_ADDRESS: ${EVM_ADDRESS}
     networks:
       - proxy-net
-
+    logging:
+      driver: loki
+      options:
+        loki-url: ${LOKI_URL}
 networks:
   proxy-net:

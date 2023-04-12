@@ -48,5 +48,6 @@ jobs:
           TAG: ${{ github.sha }}
           SOLANA_RPC_ENDPOINT: ${{ vars.SOLANA_RPC_ENDPOINT }}
           EVM_ADDRESS: ${{ vars.EVM_ADDRESS }}
+          LOKI_URL: ${{ secrets.LOKI_URL }}
         run: |
           docker-compose -f docker-compose-wssubscriber.yml up -d 
