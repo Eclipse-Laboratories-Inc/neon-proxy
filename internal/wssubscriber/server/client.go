@@ -93,8 +93,8 @@ type logsFilters struct {
 }
 
 type SubscribeLogsFilterParams struct {
-	Addresses []string `json:"addresses"`
-	Topics    []string `json:"topics"`
+	Addresses interface{} `json:"addresses"`
+	Topics    interface{} `json:"topics"`
 }
 
 // subscription response from websocket
