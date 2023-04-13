@@ -34,7 +34,7 @@ func (h TestHandler) Handle(event Event) error {
 
 func TestDispatcherOneHandler(t *testing.T) {
 	processedTestHandlers = nil
-	d := NewDispatcher()
+	d := DispatcherInstance()
 	ev := TestEvent{
 		name: "ABCD-event",
 	}
@@ -48,11 +48,26 @@ func TestDispatcherOneHandler(t *testing.T) {
 	assert.Equal(t, "ABCD-event", ev.Name())
 	assert.Len(t, processedTestHandlers, 1)
 	assert.Equal(t, processedTestHandlers[0], "ABCD-Handler")
+
+	d.UnRegister(ev)
+}
+
+func TestDispatcherNotifyEventWithoutHandler(t *testing.T) {
+	processedTestHandlers = nil
+	d := DispatcherInstance()
+	ev := TestEvent{
+		name: "ABCD-event",
+	}
+
+	err := d.Notify(ev)
+	assert.NoError(t, err)
+	assert.Equal(t, "ABCD-event", ev.Name())
+	assert.Len(t, processedTestHandlers, 0)
 }
 
 func TestDispatcherOneHandlerMustTriggerWithoutError(t *testing.T) {
 	processedTestHandlers = nil
-	d := NewDispatcher()
+	d := DispatcherInstance()
 	ev := TestEvent{
 		name: "ABCD-event",
 	}
@@ -65,11 +80,13 @@ func TestDispatcherOneHandlerMustTriggerWithoutError(t *testing.T) {
 	assert.Equal(t, "ABCD-event", ev.Name())
 	assert.Len(t, processedTestHandlers, 1)
 	assert.Equal(t, processedTestHandlers[0], "ABCD-Handler")
+
+	d.UnRegister(ev)
 }
 
 func TestDispatcherMultyHandlersWithPriority(t *testing.T) {
 	processedTestHandlers = nil
-	d := NewDispatcher()
+	d := DispatcherInstance()
 	ev := TestEvent{
 		name: "ABCD-event",
 	}
@@ -93,6 +110,7 @@ func TestDispatcherMultyHandlersWithPriority(t *testing.T) {
 		"ABCD-handler -100",
 	}
 	assert.Equal(t, handlerNames, processedTestHandlers)
+	d.UnRegister(ev)
 }
 
 // handler function
@@ -114,7 +132,7 @@ func testHandlerFunc2(e Event) error {
 
 func TestDispatcherHandlerFuncWithPriority(t *testing.T) {
 	processedTestHandlers = nil
-	d := NewDispatcher()
+	d := DispatcherInstance()
 	ev := TestEvent{
 		name: "ABCD-event",
 	}
@@ -157,7 +175,7 @@ func (e TestEventAsync) IsAsynchronous() bool {
 
 func TestDispatcherAsyncEvent(t *testing.T) {
 	processedTestHandlers = nil
-	d := NewDispatcher()
+	d := DispatcherInstance()
 	ev := TestEventAsync{
 		name: "ABCD-event-async",
 	}
@@ -194,7 +212,7 @@ func testHandlerFuncError1(e Event) error {
 }
 
 func TestDispatcherMustTriggerWithError(t *testing.T) {
-	d := NewDispatcher()
+	d := DispatcherInstance()
 	ev := TestEvent{
 		name: "ABCD-event",
 	}
