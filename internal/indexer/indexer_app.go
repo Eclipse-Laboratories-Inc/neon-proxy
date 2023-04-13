@@ -12,16 +12,23 @@ type IndexerApp struct {
 	logger    logger.Logger
 	db        *IndexerDB
 	collector *Collector
+
+	gatherStatistics  bool
+	skipCancelTimeout int
+	holderTimeout     int
 }
 
-func NewIndexerApp(ctx context.Context, log logger.Logger, db *sql.DB) *IndexerApp {
+func NewIndexerApp(ctx context.Context, log logger.Logger, db *sql.DB, gatherStatistics bool) *IndexerApp {
 	iDB := &IndexerDB{}
 	iDB.Init(db)
 
 	return &IndexerApp{
-		ctx:    ctx,
-		logger: log,
-		db:     iDB,
+		ctx:               ctx,
+		logger:            log,
+		db:                iDB,
+		gatherStatistics:  gatherStatistics,
+		skipCancelTimeout: 100, //todo read from Env variable
+		holderTimeout:     100, //todo read from Env variable
 	}
 }
 

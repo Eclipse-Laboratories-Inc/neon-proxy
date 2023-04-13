@@ -25,6 +25,11 @@ type SolTxMetaInfo struct {
 	reqID string
 }
 
+func NewSolTxMetaInfoFromEndRange(blockSlot int, commitment string) *SolTxMetaInfo {
+	// todo implement
+	return &SolTxMetaInfo{}
+}
+
 type Status int
 
 const (
@@ -45,7 +50,29 @@ type SolIxLogState struct {
 	innerLogs []SolIxLogState
 }
 
-type SolIxMetaInfo struct {
+type SolTxCostInfo struct {
+	solSign   string
+	blockSlot int
+	operator  string
+	solSpent  int
+
+	str            string
+	calculatedStat bool
+}
+
+type SolTxLogDecoder struct{} //todo move to decoder?
+type NeonLogTxReturn struct {
+	Cancled bool
+} // todo move to decoder?
+
+type Ident struct {
+	solSign   string
+	blockSlot int
+	idx       int
+	innerIdx  int
+}
+
+type SolNeonIxReceiptInfo struct {
 	ix       map[string]string
 	idx      int
 	innerIdx int
@@ -63,32 +90,8 @@ type SolIxMetaInfo struct {
 	neonGasUsed      int
 	neonTotalGasUsed int
 
-	neonTxReturn NeonLogTxReturn
+	neonTxReturn *NeonLogTxReturn
 	neonTxEvents []NeonLogTxEvent
-}
-
-type SolTxCostInfo struct {
-	solSign   string
-	blockSlot int
-	operator  string
-	solSpent  int
-
-	str            string
-	calculatedStat bool
-}
-
-type SolTxLogDecoder struct{} //todo move to decoder?
-type NeonLogTxReturn struct{} // todo move to decoder?
-
-type Ident struct {
-	solSign   string
-	blockSlot int
-	idx       int
-	innerIdx  int
-}
-
-type SolNeonIxReceiptInfo struct {
-	metaInfo SolIxMetaInfo
 
 	solSign   string
 	blockSlot int
@@ -146,4 +149,9 @@ func InsertBatchImpl(indexerDB DBInterface, pCounter prometheus.Counter, data []
 	}
 	pCounter.Add(float64(len(data)))
 	return res.LastInsertId()
+}
+
+func str_fmt_object(obj interface{}, skip_underling bool) string {
+	//todo implement with decoder
+	return ""
 }

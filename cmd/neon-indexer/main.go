@@ -37,6 +37,6 @@ func runIndexer(s *service.Service) {
 			panic(err)
 		}
 	*/
-	app := indexer.NewIndexerApp(s.GetContext(), s.GetLogger(), indexerDB.GetRawDB())
+	app := indexer.NewIndexerApp(s.GetContext(), s.GetLogger(), indexerDB.GetRawDB(), s.GatherStatistics())
 	app.Run()
 }

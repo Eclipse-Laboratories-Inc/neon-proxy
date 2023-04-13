@@ -54,16 +54,17 @@ func (e PostServiceOnlineEvent) ServiceName() string {
 var Version string
 
 type Service struct {
-	env             string
-	name            string
-	version         string
-	ctx             context.Context
-	cliApp          *cli.App
-	cliContext      *cli.Context
-	loggerManager   *LoggerManager
-	dbManager       *DatabaseManager
-	solanaRpcClient *rpc.Client
-	handlers        []func(service *Service)
+	env              string
+	name             string
+	version          string
+	gatherStatistics bool
+	ctx              context.Context
+	cliApp           *cli.App
+	cliContext       *cli.Context
+	loggerManager    *LoggerManager
+	dbManager        *DatabaseManager
+	solanaRpcClient  *rpc.Client
+	handlers         []func(service *Service)
 }
 
 func CreateService(
@@ -84,9 +85,10 @@ func CreateService(
 	}
 
 	s := &Service{
-		env:     env,
-		name:    configuration.Name,
-		version: Version,
+		env:              env,
+		name:             configuration.Name,
+		version:          Version,
+		gatherStatistics: configuration.GatherStatistics,
 	}
 
 	s.initContext()
@@ -306,4 +308,8 @@ func (s *Service) GetDB(name string) (*postgres.Connector, error) {
 
 func (s *Service) GetPool(name string) (*postgres.PoolConnector, error) {
 	return s.dbManager.GetPostgresManager().getPoolConnector(name)
+}
+
+func (s *Service) GatherStatistics() bool {
+	return s.gatherStatistics
 }
