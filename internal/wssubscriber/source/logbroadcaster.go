@@ -773,6 +773,7 @@ func processSplitTransaction(txHash string) ([]NeonLogTxEvent, bool, []byte, *Ne
 		return logData.logIterations[i].usedGas < logData.logIterations[j].usedGas
 	})
 
+	// combine all the iteration logs 
 	logMessages := make([]string, 0)
 	for _, messages := range logData.logIterations {
 		logMessages = append(logMessages, messages.logs...)
