@@ -62,3 +62,16 @@ COPY --from=goproxybuilder /app/bin/neon-indexer /app/
 EXPOSE 20502
 
 CMD ["/app/neon-indexer"]
+
+
+FROM ubuntu:22.04 as neon-wssubscriber
+
+RUN apt-get update && apt-get install ca-certificates -y
+
+WORKDIR /app
+
+COPY --from=goproxybuilder /app/bin/neon-wssubscriber /app/
+
+EXPOSE 20503
+
+CMD ["/app/neon-wssubscriber"]
