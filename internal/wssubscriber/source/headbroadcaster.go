@@ -18,6 +18,7 @@ import (
 // error code is returned when specific slot is skipped, we check this and jump over skipped blocks during process
 const (
 	slotWasSkippedErrorCode = -32007
+	blockNotAvailableErrorCode = -32004
 )
 
 // define block header that we broadcast to users
@@ -147,9 +148,14 @@ func processBlocks(ctx *context.Context, solanaWebsocketEndpoint string, log log
 
 		// check rpc error
 		if blockHeader.Error != nil {
+			fmt.Println(blockHeader.Error)
 			// check if the given slot was skipped if so we jump over it and continue processing blocks from the next slot
 			if blockHeader.Error.Code == slotWasSkippedErrorCode {
 				*from++
+				continue
+			}
+
+			if blockHeader.Error.Code == blockNotAvailableErrorCode {
 				continue
 			}
 			return errors.New(blockHeader.Error.Message)
