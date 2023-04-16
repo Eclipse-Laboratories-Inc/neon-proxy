@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
-	"regexp"
-	"strings"
 
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/source"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
@@ -40,7 +38,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 
 		var filterParams SubscribeLogsFilterParams
 		if err := json.Unmarshal(jsonParams, &filterParams); err != nil {
-			responseRPC.Error = "failed to read log filters"
+			responseRPC.Error = "failed to read log filters, incorrect json format"
 			return
 		}
 
@@ -66,61 +64,50 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 
 func (c *Client) buildFilters(params SubscribeLogsFilterParams) error {
 	c.logsFilters = &logsFilters{}
+	c.logsFilters.Addresses = make([]string, 0)
+	c.logsFilters.Topics = make([][]string, 0)
 
-	// addresses can be any type, but we set up as filter only if it's
-	// not empty string
-	switch addresses := params.Addresses.(type) {
-	case string:
-		if addresses != "" {
-			c.logsFilters.Addresses = make(map[string]struct{})
-			c.logsFilters.Addresses[addresses] = struct{}{}
-		}
-	case []interface{}:
-		if len(addresses) > 0 {
-			c.logsFilters.Addresses = make(map[string]struct{})
-		}
-		for _, addr := range addresses {
-			switch a := addr.(type) {
-			case string:
-				if a != "" {
-					c.logsFilters.Addresses[a] = struct{}{}
-				}
-			}
+	// check if address is given in a signe field
+	if utils.IsAddressValid(params.Address) {
+		c.logsFilters.Addresses = append(c.logsFilters.Addresses, params.Address)
+	}
+
+	// parse filter addresses
+	for _, addr := range params.Addresses {
+		if utils.IsAddressValid(addr) {
+			c.logsFilters.Addresses = append(c.logsFilters.Addresses, addr)
 		}
 	}
 
-	// topics can be only array of strings, which have prefix "0x" and have to be
-	// longer, than 64 symbols (32 bytes)
-	topicsFormat := regexp.MustCompile(`^[0-9a-fA-F]*$`)
-	switch topics := params.Topics.(type) {
-	case string:
-		return ErrLogFilterInvalidTopicsString
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, uintptr, float32, float64:
-		return ErrLogFilterInvalidTopicsNumber
-	case []interface{}:
-		if len(topics) > 0 {
-			c.logsFilters.Topics = make(map[string]struct{})
+	// parsing topics
+	for _, topics := range params.Topics {
+		// if we have null at the position
+		if topics == nil {
+			c.logsFilters.Topics = append(c.logsFilters.Topics, nil)
 		}
-		for _, topic := range topics {
-			switch t := topic.(type) {
-			case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, uintptr, float32, float64:
-				return ErrLogFilterInvalidTopicsNumber
-			case string:
-				if !strings.HasPrefix(t, "0x") {
-					return ErrLogFilterInvalidDataTypes
-				}
 
-				addr := strings.Trim(t, "0x")
-				if len(addr) < 64 {
-					return fmt.Errorf("invalid log filter: data type size mismatch, expected 32, got %v", len(addr)/2)
-				}
-				if !topicsFormat.MatchString(addr) {
-					return ErrLogFilterInvalidHexCharacter
-				}
-				c.logsFilters.Topics[t] = struct{}{}
+		// check if it's single string or array of strings
+		switch topics.(type) {
+		case string:
+			if utils.IsTopicValid(topics.(string)) {
+				t := make([]string, 0)
+				t = append(t, topics.(string))
+				c.logsFilters.Topics = append(c.logsFilters.Topics, t)
+			} else {
+				return errors.New("Invalid topic ")
 			}
+		case []interface{}:
+			parsedTopics := make([]string, 0)
+			for _, ta := range topics.([]interface{}) {
+				switch ta.(type) {
+				case string:
+					parsedTopics = append(parsedTopics, ta.(string))
+				}
+			}
+			c.logsFilters.Topics = append(c.logsFilters.Topics, parsedTopics)
 		}
 	}
+
 	return nil
 }
 
@@ -152,17 +139,19 @@ func (c *Client) CollectNewLogs() {
 			if err != nil {
 				c.log.Error().Err(err).Msg(fmt.Sprintf("filter logs output: %v", err))
 				c.newLogsLocker.Unlock()
-				return
+				continue
+			}
 
-			} else if logs == nil {
+			//
+			if logs == nil {
 				// after filtering we got no logs
 				c.newLogsLocker.Unlock()
 				continue
-			} else {
-				clientResponse.Params.Result = logs
 			}
-
 			c.newLogsLocker.Unlock()
+
+			// set parsed matched logs
+			clientResponse.Params.Result = logs
 
 			// marshal to send it as a json
 			response, err := json.Marshal(clientResponse)
@@ -184,44 +173,38 @@ func (c *Client) CollectNewLogs() {
 // Otherwise it checks if log contains AT LEAST 1 address from "address" filter OR AT LEAST 1 topic from "topic" filter
 func (c *Client) FilterLogs(newLog []byte) ([]byte, error) {
 	// no filters set up
-	if c.logsFilters == nil || c.logsFilters.Addresses == nil && c.logsFilters.Topics == nil {
+	if len(c.logsFilters.Addresses) == 0 && len(c.logsFilters.Topics) == 0 {
 		return newLog, nil
 	}
 
-	rowLog := source.EthLog{}
-	if err := json.Unmarshal(newLog, &rowLog); err != nil {
+	// unmarshall log
+	rawLog := source.EthLog{}
+	if err := json.Unmarshal(newLog, &rawLog); err != nil {
 		return nil, err
 	}
 
-	filters := c.logsFilters
-
-	// it seems, in Ethereum filter by topics has higher priority
-	// if we send request { "id": 1, "method": "eth_subscribe", "params": [ "logs", { "addresses": ["0xc309c03e4d5065ea4a7d591fb9a4c418cb6e4812f0a768623ec9bd878fe2c829"], "topics": []}]}
-	// for subscription to Ethereum, it returns all logs with all addresses without filtering
-	if filters.Topics == nil {
-		return newLog, nil
+	// if address didn't match
+	if len(c.logsFilters.Addresses) != 0 && !utils.Includes(c.logsFilters.Addresses, rawLog.Address) {
+		return nil, nil
 	}
 
-	// check if any address filter is set up and log contains this topic
-	if filters.Topics != nil {
-		for _, topic := range rowLog.Topics {
-			_, ok := filters.Topics[topic]
-			if ok {
-				return newLog, nil
-			}
+	// expecting more topics then there are
+	if len(c.logsFilters.Topics) > len(rawLog.Topics) {
+		return nil, nil
+	}
+
+	// check topic match
+	for ind, topic := range c.logsFilters.Topics {
+		// if corresponding requirement was 'null' skip
+		if topic == nil {
+			continue
+		}
+
+		// if topic filter didn't match return empty
+		if !utils.Includes(topic, rawLog.Topics[ind]) {
+			return nil, nil
 		}
 	}
 
-	// it seems, in Ethereum in case if we can't pass filter by topics, we return nothing,
-	// so it doesn't make sense to check filter by address
-
-	// check if any address filter is set up and log contains this address
-	/*if filters.Addresses != nil {
-		_, ok := filters.Addresses[rowLog.Address]
-		if ok {
-			return newLog, nil
-		}
-	}*/
-
-	return nil, nil
+	return newLog, nil
 }

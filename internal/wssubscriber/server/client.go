@@ -88,13 +88,14 @@ type SubscribeJsonRPC struct {
 }
 
 type logsFilters struct {
-	Addresses map[string]struct{}
-	Topics    map[string]struct{}
+	Addresses []string
+	Topics    [][]string
 }
 
 type SubscribeLogsFilterParams struct {
-	Addresses interface{} `json:"addresses"`
-	Topics    interface{} `json:"topics"`
+	Addresses []string      `json:"addresses"`
+	Address   string        `json:"address"`
+	Topics    []interface{} `json:"topics"`
 }
 
 // subscription response from websocket

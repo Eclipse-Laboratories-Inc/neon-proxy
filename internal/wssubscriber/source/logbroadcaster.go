@@ -49,75 +49,9 @@ var (
 	EvmInvocationLog        = "Program " + os.Getenv(config.EvmAddress) + " invoke"
 	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
 	EvmInvocationFailEnd    = "Program " + os.Getenv(config.EvmAddress) + " fail"
-
-)
-
-// eth event log data parsed from solaan logs
-type NeonLogTxEvent struct {
-	eventType       int
-	usedGas         int
-	transactionHash []byte
-	address         []byte
-	topicList       []string
-	data            []byte
-}
-
-// current log and transaction index
-type Indexes struct {
-	processed map[string]int
-	transactionIndex int
-	logIndex         int
-}
-
-// eth event structure
-type Event struct {
-	TransactionHash string   `json:"transactionHash"`
-	Address         string   `json:"address"`
-	Topics          []string `json:"topics"`
-	Data            string   `json:"data"`
-	LogIndex        string   `json:"logIndex"`
-}
-
-// eth tx block related params
-type BlockParams struct {
-	BlockNumber      string `json:blockNumber`
-	TransactionIndex string `json:"transactionIndex"`
-	BlockHash        string `json:"blockHash"`
-}
-
-// defines eth log structure for each transaction
-type EthLog struct {
-	BlockParams
-	Event
-}
-
-type LogData struct {
-	usedGas int
-	logs []string
-}
-
-type IterationCache struct{
-	totalUsedGas   int
-	targetTotalGas int
-	logIterations  []LogData
-}
-
-// gas usage info parsed from logs
-type NeonLogTxIx struct {
-	gasUsed      int
-	totalGasUsed int
-}
-
-// log return status
-type NeonLogTxReturn struct {
-	gasUsed int
-	status  int
-}
-
-
-var (
 	// cache for transaction iterations until all the iterations are found and eth transaction processed
 	splitTransactions map[string]IterationCache
+
 )
 
 // RegisterLogsBroadcasterSources passes data and error channels where new incoming data (transaction logs) will be pushed and redirected to broadcaster
@@ -143,6 +77,9 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 
 			// for saving current tx and log indexes
 			indexes := make(map[int]Indexes)
+
+			// for saving slot and corresponding block hash assiciation
+			blockHashes := make(map[int]string)
 
 			//for saving multiple-iteration transaction data (like a cache)
 			splitTransactions = make(map[string]IterationCache)
@@ -181,7 +118,7 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 
 			// process the blocks in given interval
 			log.Info().Msg("processing logs")
-			if err := processTransactionLogs(ctx, solanaWebsocketEndpoint, log, logsSource, logsSourceError, &transactionSignatures, indexes); err != nil {
+			if err := processTransactionLogs(ctx, solanaWebsocketEndpoint, log, logsSource, logsSourceError, &transactionSignatures, blockHashes, indexes); err != nil {
 				log.Error().Err(err).Msg("Error on processing tx logs")
 				logsSourceError <- err
 				continue
@@ -191,16 +128,13 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 			if len(transactionSignatures.Result) > 0 {
 				latestProcessedTransaction = transactionSignatures.Result[0].Signature
 			}
-
-			return
-
 		}
 	}()
 	return nil
 }
 
 // request each block from "from" to "to" from the rpc endpoint and broadcast to user
-func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, logsSource chan interface{}, logsSourceError chan error, signatures *TransactionSignatures, indexes map[int]Indexes) error {
+func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, logsSource chan interface{}, logsSourceError chan error, signatures *TransactionSignatures, blockHashes map[int]string, indexes map[int]Indexes) error {
 	// process each block sequentially, broadcasting to peers
 	for k := len(signatures.Result) - 1; k >= 0; k-- {
 		// get block with given slot
@@ -211,6 +145,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 			return err
 		}
 
+		// json defined transaction from rpc response
 		var transaction Transaction
 
 		// unrmarshal transaction data
@@ -225,7 +160,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 		}
 
 		// get eth logs from block
-		ethlogs, err := getEthLogsFromTransaction(&transaction, indexes, log, solanaWebsocketEndpoint)
+		ethlogs, err := getEthLogsFromTransaction(&transaction, blockHashes, indexes, log, solanaWebsocketEndpoint)
 		if err != nil {
 			return err
 		}
@@ -241,8 +176,6 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 				return err
 			}
 
-			fmt.Println(string(clientResponse))
-
 			// broadcast contract event log
 			logsSource <- clientResponse
 		}
@@ -255,9 +188,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 For each given solana transaction signature we request the whole transaction object
 from which we parse instruction data where eth transaction parameters (including logs) are stored
 */
-func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
-	log.Info().Msg("Processing transaction " + transaction.Result.Transaction.Signatures[0])
-
+func getEthLogsFromTransaction(transaction *Transaction, blockHashes map[int]string, indexes map[int]Indexes, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
 	// create response array of logs
 	ethLogs := make([]EthLog, 0)
 
@@ -266,8 +197,7 @@ func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes
 	var err error
 
 	// fill initial log values
-	//NOTE can be optimized by caching the block hashes
-	ethLog.BlockHash, err = GetBlockHash(transaction.Result.Slot, solanaWebsocketEndpoint)
+	ethLog.BlockHash, err = GetBlockHash(blockHashes, transaction.Result.Slot, solanaWebsocketEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -281,24 +211,30 @@ func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes
 		return nil, err
 	}
 
-	// skip this tx
-	if events == nil {
-		return ethLogs, nil
+	// if uninitialized we initialize the map for block slot which stores transaction hash and it's corresponding index in the given block
+	if indexes[transaction.Result.Slot].processed == nil {
+		v := indexes[transaction.Result.Slot]
+		v.processed = make(map[string]int, 0)
+		indexes[transaction.Result.Slot] = v
 	}
 
 	// fill events
 	for _, event := range events {
+		// set basic field values
 		ethLog.Address = event.Address
 		ethLog.TransactionHash = event.TransactionHash
 		ethLog.Data = event.Data
 		ethLog.LogIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].logIndex)
 
-		if indexes[transaction.Result.Slot].processed == nil {
-			v := indexes[transaction.Result.Slot]
-			v.processed = make(map[string]int, 0)
-			indexes[transaction.Result.Slot] = v
-		}
+		// update log index
+		inds := indexes[transaction.Result.Slot]
+		inds.logIndex++
+		indexes[transaction.Result.Slot] = inds
 
+		/*
+			if we already have determined transaction index for given transaction hash we set that value
+			otherwise it means we have a new/unknown eth transaction in the block and increase transaction index
+		*/
 		if _, ok := indexes[transaction.Result.Slot].processed[ethLog.TransactionHash]; ok == true {
 			ethLog.TransactionIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].processed[ethLog.TransactionHash])
 		} else {
@@ -308,10 +244,6 @@ func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes
 			v.transactionIndex++
 			indexes[transaction.Result.Slot] = v
 		}
-		// update log index
-		inds := indexes[transaction.Result.Slot]
-		inds.logIndex++
-		indexes[transaction.Result.Slot] = inds
 
 		// increment index for the next log/event
 		ethLog.Topics = event.Topics
@@ -534,32 +466,12 @@ func GetEvents(logMessages []string) ([]Event, error) {
 						return nil, err
 					}
 
-					// check if we have iteration transaction logs
+					// if the transaction is one of the iteration process separately
 					if isIteration {
-						// append new iteration log messages
-						v := splitTransactions["0x" + hex.EncodeToString(txHash)]
-						v.totalUsedGas += usedGas.gasUsed
-						if v.logIterations == nil {
-							v.logIterations = make([]LogData, 0)
+						eventLogs, err = processSplitTransaction("0x" + hex.EncodeToString(txHash), usedGas, logMessages[evmProgramStartIndex:k])
+						if err != nil {
+							return nil, err
 						}
-						v.logIterations = append(v.logIterations, LogData{usedGas: usedGas.totalGasUsed, logs: logMessages[evmProgramStartIndex:k]})
-						splitTransactions["0x" + hex.EncodeToString(txHash)] = v
-
-						// check condition if we have collected all the iterations
-						if v.totalUsedGas == v.targetTotalGas {
-								eventLogs, _, _, _, err := processSplitTransaction("0x" + hex.EncodeToString(txHash))
-								if err != nil {
-									return nil, err
-								}
-								// remove processed split transaction data
-								delete(splitTransactions, "0x" + hex.EncodeToString(txHash))
-								// append newly parsed logs
-								ethEvents = append(ethEvents, eventLogs...)
-								k++
-						}
-
-						k++
-						break
 					}
 
 					// append newly parsed logs
@@ -683,6 +595,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 		if len(name) == 0 {
 			continue
 		}
+
 		// Use switch on the instruction name variable.
 		switch {
 		case name == "HASH":
@@ -746,14 +659,33 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 		}
 	}
 
-	// check if it's iteration transaction
-	if (neonTxReturn == nil && neonTxIx != nil) || (neonTxReturn != nil && neonTxIx.gasUsed != neonTxIx.totalGasUsed) {
-		// set total target gas for eth transaction, which help to determine if we have collected all the iterations
-		if neonTxReturn != nil  {
-			v := splitTransactions["0x" + hex.EncodeToString(neonTxHash)]
-			v.targetTotalGas = neonTxIx.totalGasUsed
-			splitTransactions["0x" + hex.EncodeToString(neonTxHash)] = v
-		}
+
+	// check if transaction is one of the iterations of eth transaction
+	/*
+		case 1: the iteration is the last iteration with RETURN instruction and the total gas.
+		Note that we use the totalGasUsed value from this transaction as the target.
+		We sum up all the other iteration gas usage and when the sum is equal to the totalGasUsed from this iteration
+		it means we have collected all the iterations of the eth transaction.
+	*/
+	if neonTxReturn != nil && neonTxIx.gasUsed != neonTxIx.totalGasUsed {
+		/*
+			set the gas usage target of the eth transaction.
+			When the sum of all iteration gas usage reaches this value we know we have collected all the iterations.
+		*/
+		v := splitTransactions["0x" + hex.EncodeToString(neonTxHash)]
+		v.targetTotalGas = neonTxIx.totalGasUsed
+		splitTransactions["0x" + hex.EncodeToString(neonTxHash)] = v
+
+		return nil, true, neonTxHash, neonTxIx, nil
+	}
+
+	/*
+		case 2: one of the other iteration except the last iteration with RETURN instruction.
+		In this case we have no RETURN instruction which basically means that it's already iteration type,
+		but also we check that we have information about gas usage to be able to order
+		the iterations according to gas usage in the and before processing them together.
+  */
+	if (neonTxReturn == nil && neonTxIx != nil) {
 		return nil, true, neonTxHash, neonTxIx, nil
 	}
 
@@ -761,28 +693,53 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 }
 
 // at this point we know we have collected all the iteration log messages, we sort and process it as one eth transaction log
-func processSplitTransaction(txHash string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTxIx, error) {
-	// remove processed data from map
-	defer delete(splitTransactions, txHash)
+func processSplitTransaction(txHash string, usedGas *NeonLogTxIx, logMessages []string) ([]NeonLogTxEvent, error) {
 
-	// get log message data
+	// append new iteration log messages
 	logData := splitTransactions[txHash]
+	logData.totalUsedGas += usedGas.gasUsed
+	if logData.logIterations == nil {
+		logData.logIterations = make([]LogData, 0)
+	}
+	logData.logIterations = append(logData.logIterations, LogData{usedGas: usedGas.totalGasUsed, logs: logMessages})
+	splitTransactions[txHash] = logData
 
-	// Sort by age, keeping original order or equal elements.
-	sort.SliceStable(logData.logIterations, func(i, j int) bool {
-		return logData.logIterations[i].usedGas < logData.logIterations[j].usedGas
-	})
+	// check condition if we have collected all the iterations
+	if logData.totalUsedGas == logData.targetTotalGas {
+		fmt.Println("processing iterations")
+		// remove processed data from map
+		defer delete(splitTransactions, txHash)
 
-	// combine all the iteration logs 
-	logMessages := make([]string, 0)
-	for _, messages := range logData.logIterations {
-		logMessages = append(logMessages, messages.logs...)
+		// Sort by age, keeping original order or equal elements.
+		sort.SliceStable(logData.logIterations, func(i, j int) bool {
+			return logData.logIterations[i].usedGas < logData.logIterations[j].usedGas
+		})
+
+		// combine all the iteration logs
+		logMessages := make([]string, 0)
+		for _, messages := range logData.logIterations {
+			logMessages = append(logMessages, messages.logs...)
+		}
+
+		// parse combined log messages from all the iterations
+		logs, _, _, _, err := parseLogs(logMessages)
+		if err != nil {
+			return nil, err
+		}
+
+		return logs, nil
 	}
 
-	return parseLogs(logMessages)
+	return nil, nil
 }
 
-func GetBlockHash(slot int, solanaWebsocketEndpoint string) (string, error) {
+// get block hash for given slot number to fill log data
+func GetBlockHash(blockHashes map[int]string, slot int, solanaWebsocketEndpoint string) (string, error) {
+	// check if we have already queried
+	if val, ok := blockHashes[slot]; ok == true {
+		return val, nil
+	}
+
 	// get block with given slot
 	response, err := jsonRPC([]byte(`{
 		"jsonrpc": "2.0","id":1,
@@ -815,6 +772,9 @@ func GetBlockHash(slot int, solanaWebsocketEndpoint string) (string, error) {
 	if blockHeader.Error != nil {
 		return "", errors.New(blockHeader.Error.Message)
 	}
+
+	// save in cache
+	blockHashes[slot] = utils.Base58stringToHex(blockHeader.Result.Blockhash)
 
 	return utils.Base58stringToHex(blockHeader.Result.Blockhash), nil
 }
