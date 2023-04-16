@@ -48,3 +48,12 @@ func NewID() string {
 
 	return string("0x" + rpcId)
 }
+
+func Includes(s []string, i string) bool {
+	for _, val := range s {
+		if val == i {
+			return true
+		}
+	}
+	return false
+}

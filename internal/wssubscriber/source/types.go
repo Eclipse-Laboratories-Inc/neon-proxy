@@ -111,3 +111,66 @@ type Transaction struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
 }
+
+// eth event log data parsed from solaan logs
+type NeonLogTxEvent struct {
+	eventType       int
+	usedGas         int
+	transactionHash []byte
+	address         []byte
+	topicList       []string
+	data            []byte
+}
+
+// current log and transaction index
+type Indexes struct {
+	processed map[string]int
+	transactionIndex int
+	logIndex         int
+}
+
+// eth event structure
+type Event struct {
+	TransactionHash string   `json:"transactionHash"`
+	Address         string   `json:"address"`
+	Topics          []string `json:"topics"`
+	Data            string   `json:"data"`
+	LogIndex        string   `json:"logIndex"`
+}
+
+// eth tx block related params
+type BlockParams struct {
+	BlockNumber      string `json:"blockNumber"`
+	TransactionIndex string `json:"transactionIndex"`
+	BlockHash        string `json:"blockHash"`
+}
+
+// defines eth log structure for each transaction
+type EthLog struct {
+	BlockParams
+	Event
+	Removed bool `json:"removed"`
+}
+
+type LogData struct {
+	usedGas int
+	logs []string
+}
+
+type IterationCache struct{
+	totalUsedGas   int
+	targetTotalGas int
+	logIterations  []LogData
+}
+
+// gas usage info parsed from logs
+type NeonLogTxIx struct {
+	gasUsed      int
+	totalGasUsed int
+}
+
+// log return status
+type NeonLogTxReturn struct {
+	gasUsed int
+	status  int
+}

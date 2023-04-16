@@ -3,6 +3,7 @@ package source
 import (
 	"os"
 	"bytes"
+	"sort"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -48,53 +49,10 @@ var (
 	EvmInvocationLog        = "Program " + os.Getenv(config.EvmAddress) + " invoke"
 	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
 	EvmInvocationFailEnd    = "Program " + os.Getenv(config.EvmAddress) + " fail"
+	// cache for transaction iterations until all the iterations are found and eth transaction processed
+	splitTransactions map[string]IterationCache
 
 )
-
-// eth event log data parsed from solaan logs
-type NeonLogTxEvent struct {
-	eventType       int
-	transactionHash []byte
-	address         []byte
-	topicList       []string
-	data            []byte
-	callLevel       int
-}
-
-// current log and transaction index
-type Indexes struct {
-	transactionIndex int
-	logIndex         int
-}
-
-// eth event structure
-type Event struct {
-	TransactionHash string   `json:"transactionHash"`
-	Address         string   `json:"address"`
-	Topics          []string `json:"topics"`
-	Data            string   `json:"data"`
-	LogIndex        string   `json:"logIndex"`
-}
-
-// defines eth log structure for each transaction
-type EthLog struct {
-	BlockNumber      string `json:blockNumber`
-	TransactionIndex string `json:"transactionIndex"`
-	BlockHash        string `json:"blockHash"`
-	Event
-}
-
-// gas usage info parsed from logs
-type NeonLogTxIx struct {
-	gasUsed      int
-	totalGasUsed int
-}
-
-// log return status
-type NeonLogTxReturn struct {
-	gasUsed int
-	status  int
-}
 
 // RegisterLogsBroadcasterSources passes data and error channels where new incoming data (transaction logs) will be pushed and redirected to broadcaster
 func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, solanaWebsocketEndpoint, evmAddress string, broadcaster *broadcaster.Broadcaster) error {
@@ -120,6 +78,12 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 			// for saving current tx and log indexes
 			indexes := make(map[int]Indexes)
 
+			// for saving slot and corresponding block hash assiciation
+			blockHashes := make(map[int]string)
+
+			//for saving multiple-iteration transaction data (like a cache)
+			splitTransactions = make(map[string]IterationCache)
+
 			// prepare curl parameter
 			var untilParameter string
 			if latestProcessedTransaction != "" {
@@ -127,7 +91,7 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 			}
 
 			// get latest block number
-			signaturesResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method": "getSignaturesForAddress", "params":["`+evmAddress+`",{"commitment":"finalized" `+untilParameter+`}]}`), solanaWebsocketEndpoint, "POST")
+			signaturesResponse, err := jsonRPC([]byte(`{"jsonrpc":"2.0","id":1, "method": "getSignaturesForAddress", "params":["`+evmAddress+`",{"commitment":"finalized" `+untilParameter+`, "limit":100}]}`), solanaWebsocketEndpoint, "POST")
 			if err != nil {
 				log.Error().Err(err).Msg("Error on rpc call for checking the latest slot on chain")
 				logsSourceError <- err
@@ -154,7 +118,7 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 
 			// process the blocks in given interval
 			log.Info().Msg("processing logs")
-			if err := processTransactionLogs(ctx, solanaWebsocketEndpoint, log, logsSource, logsSourceError, &transactionSignatures, indexes); err != nil {
+			if err := processTransactionLogs(ctx, solanaWebsocketEndpoint, log, logsSource, logsSourceError, &transactionSignatures, blockHashes, indexes); err != nil {
 				log.Error().Err(err).Msg("Error on processing tx logs")
 				logsSourceError <- err
 				continue
@@ -164,14 +128,13 @@ func RegisterLogsBroadcasterSources(ctx *context.Context, log logger.Logger, sol
 			if len(transactionSignatures.Result) > 0 {
 				latestProcessedTransaction = transactionSignatures.Result[0].Signature
 			}
-
 		}
 	}()
 	return nil
 }
 
 // request each block from "from" to "to" from the rpc endpoint and broadcast to user
-func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, logsSource chan interface{}, logsSourceError chan error, signatures *TransactionSignatures, indexes map[int]Indexes) error {
+func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, logsSource chan interface{}, logsSourceError chan error, signatures *TransactionSignatures, blockHashes map[int]string, indexes map[int]Indexes) error {
 	// process each block sequentially, broadcasting to peers
 	for k := len(signatures.Result) - 1; k >= 0; k-- {
 		// get block with given slot
@@ -182,6 +145,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 			return err
 		}
 
+		// json defined transaction from rpc response
 		var transaction Transaction
 
 		// unrmarshal transaction data
@@ -196,7 +160,7 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 		}
 
 		// get eth logs from block
-		ethlogs, err := getEthLogsFromTransaction(&transaction, indexes, log, solanaWebsocketEndpoint)
+		ethlogs, err := getEthLogsFromTransaction(&transaction, blockHashes, indexes, log, solanaWebsocketEndpoint)
 		if err != nil {
 			return err
 		}
@@ -212,7 +176,6 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 				return err
 			}
 
-			fmt.Println(string(clientResponse))
 			// broadcast contract event log
 			logsSource <- clientResponse
 		}
@@ -225,25 +188,16 @@ func processTransactionLogs(ctx *context.Context, solanaWebsocketEndpoint string
 For each given solana transaction signature we request the whole transaction object
 from which we parse instruction data where eth transaction parameters (including logs) are stored
 */
-func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
+func getEthLogsFromTransaction(transaction *Transaction, blockHashes map[int]string, indexes map[int]Indexes, log logger.Logger, solanaWebsocketEndpoint string) ([]EthLog, error) {
 	// create response array of logs
 	ethLogs := make([]EthLog, 0)
-
-	// check if transaction failed
-	if transaction.Result.Meta.Err != nil {
-		// update tx index
-		inds := indexes[transaction.Result.Slot]
-		inds.transactionIndex++
-		return ethLogs, nil
-	}
 
 	// declare log instance to fill
 	var ethLog EthLog
 	var err error
 
 	// fill initial log values
-	//NOTE can be optimized by caching the block hashes
-	ethLog.BlockHash, err = GetBlockHash(transaction.Result.Slot, solanaWebsocketEndpoint)
+	ethLog.BlockHash, err = GetBlockHash(blockHashes, transaction.Result.Slot, solanaWebsocketEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -257,21 +211,16 @@ func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes
 		return nil, err
 	}
 
-	// skip this tx
-	if events == nil {
-		return ethLogs, nil
+	// if uninitialized we initialize the map for block slot which stores transaction hash and it's corresponding index in the given block
+	if indexes[transaction.Result.Slot].processed == nil {
+		v := indexes[transaction.Result.Slot]
+		v.processed = make(map[string]int, 0)
+		indexes[transaction.Result.Slot] = v
 	}
-
-	// set next tx index
-	ethLog.TransactionIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].transactionIndex)
-
-	// update tx index
-	txinds := indexes[transaction.Result.Slot]
-	txinds.transactionIndex++
-	indexes[transaction.Result.Slot] = txinds
 
 	// fill events
 	for _, event := range events {
+		// set basic field values
 		ethLog.Address = event.Address
 		ethLog.TransactionHash = event.TransactionHash
 		ethLog.Data = event.Data
@@ -281,6 +230,20 @@ func getEthLogsFromTransaction(transaction *Transaction, indexes map[int]Indexes
 		inds := indexes[transaction.Result.Slot]
 		inds.logIndex++
 		indexes[transaction.Result.Slot] = inds
+
+		/*
+			if we already have determined transaction index for given transaction hash we set that value
+			otherwise it means we have a new/unknown eth transaction in the block and increase transaction index
+		*/
+		if _, ok := indexes[transaction.Result.Slot].processed[ethLog.TransactionHash]; ok == true {
+			ethLog.TransactionIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].processed[ethLog.TransactionHash])
+		} else {
+			indexes[transaction.Result.Slot].processed[ethLog.TransactionHash] = indexes[transaction.Result.Slot].transactionIndex
+			ethLog.TransactionIndex = fmt.Sprintf("0x%x", indexes[transaction.Result.Slot].transactionIndex)
+			v := indexes[transaction.Result.Slot]
+			v.transactionIndex++
+			indexes[transaction.Result.Slot] = v
+		}
 
 		// increment index for the next log/event
 		ethLog.Topics = event.Topics
@@ -377,15 +340,7 @@ func DecodeNeonTxGas(dataList []string) (*NeonLogTxIx, error) {
 		return nil, errors.New("Failed to decode neon ix gas : should be 2 element in datalist")
 	}
 
-	// decode used gas amount
-	gasUsedInt := new(big.Int)
-	gasUsedInt.SetString(utils.Base64stringToHex(dataList[0])[2:], 16)
-
-	// decode total gas usage
-	totalGasUsedInt := new(big.Int)
-	totalGasUsedInt.SetString(utils.Base64stringToHex(dataList[0])[2:], 16)
-
-	return &NeonLogTxIx{gasUsed: int(gasUsedInt.Int64()), totalGasUsed: int(totalGasUsedInt.Int64())}, nil
+	return &NeonLogTxIx{gasUsed: int(binary.LittleEndian.Uint32(utils.Base64stringToBytes(dataList[0]))), totalGasUsed: int(binary.LittleEndian.Uint32(utils.Base64stringToBytes(dataList[1])))}, nil
 }
 
 // Decode enter call from logs
@@ -494,6 +449,7 @@ func GetEvents(logMessages []string) ([]Event, error) {
 	//final slice of eth event logs from program logs
 	events := make([]Event, 0)
 	ethEvents := make([]NeonLogTxEvent, 0)
+
 	// find the call to evm program in the logs
 	var k int
 	for k < len(logMessages) {
@@ -505,9 +461,17 @@ func GetEvents(logMessages []string) ([]Event, error) {
 			for {
 				// check if we find evm program end, if that call succeeded we parse logs inside the segment
 				if len(logMessages[k]) >= len(EvmInvocationSuccessEnd) && logMessages[k][0:len(EvmInvocationSuccessEnd)] == EvmInvocationSuccessEnd {
-					eventLogs, err := parseLogs(logMessages[evmProgramStartIndex:k])
+					eventLogs, isIteration, txHash, usedGas, err := parseLogs(logMessages[evmProgramStartIndex:k])
 					if err != nil {
 						return nil, err
+					}
+
+					// if the transaction is one of the iteration process separately
+					if isIteration {
+						eventLogs, err = processSplitTransaction("0x" + hex.EncodeToString(txHash), usedGas, logMessages[evmProgramStartIndex:k])
+						if err != nil {
+							return nil, err
+						}
 					}
 
 					// append newly parsed logs
@@ -538,10 +502,12 @@ func GetEvents(logMessages []string) ([]Event, error) {
 	return events, nil
 }
 
-func GetEnterExitCode(ind int, logMessages []string) (int, int, error) {
-	var callDepth int
+func GetEnterExitCode(ind int, logMessages []string) (int, int) {
 	// we encounter non evm calls inside evm call segment so we remember the current depth of such calls
 	var nonEvmCallDepth int
+
+	var callDepth int
+	// we encounter non evm calls inside evm call segment so we remember the current depth of such calls
 	for ind = ind; ind <= len(logMessages) - 1; ind++ {
 		// check if some non-evm program is called
 		if isNonEvmProgramInvoke(logMessages[ind]) {
@@ -578,21 +544,21 @@ func GetEnterExitCode(ind int, logMessages []string) (int, int, error) {
 			// decode eth event log
 			neonTxEvent, err := DecodeNeonTxExit(dataList)
 			if err != nil {
-				return 0, 0, err
+				return 0, 0
 			}
 
 			// if we exit main call return it's exit status
 			if callDepth == 0 {
-				return neonTxEvent.eventType, ind, nil
+				return neonTxEvent.eventType, ind
 			}
 		}
 	}
 
-	return 0, 0, errors.New("cannot find corresponding exit status")
+	return 0, -1
 }
 
 // parses logs from evm invocation segment in logs
-func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
+func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTxIx, error) {
 	// for parsing eth transaction hash
 	var neonTxHash []byte
 	// for parsed gas usage data
@@ -603,11 +569,8 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 	var err error
 	// we encounter non evm calls inside evm call segment so we remember the current depth of such calls
 	var nonEvmCallDepth int
-	// if we encounter enter instruction we increase call depth of evm contract
-	var evmCallDepth int
 
 	neonTxEventList := make([]NeonLogTxEvent, 0)
-
 	// for each solana transaction log message decode eth data
 	for ind, line := range logMessages {
 		// check if some non-evm program is called
@@ -639,92 +602,144 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, error) {
 			if neonTxHash == nil {
 				neonTxHash, err = DecodeNeonTxSig(dataList)
 				if err != nil {
-					return nil, err
+					return nil, false, neonTxHash, neonTxIx, err
 				}
-			} else {
-				return nil, errors.New("transaction HASH encountered twice")
 			}
 		case name == "RETURN":
 			if neonTxReturn == nil {
 				neonTxReturn, err = DecodeNeonTxReturn(neonTxIx, dataList)
 				if err != nil {
-					return nil, err
+					return nil, false, neonTxHash, neonTxIx, err
 				}
 				// check transaction final status
 				if neonTxReturn.status != 1 {
-					return nil, errors.New("return status not ok")
+					return nil, false, neonTxHash, neonTxIx, errors.New("return status not ok")
 				}
 			} else {
-				return nil, errors.New("transaction RETURN encountered twice")
+				return nil, false, neonTxHash, neonTxIx, errors.New("transaction RETURN encountered twice")
 			}
 		case name == "GAS":
 			if neonTxIx == nil {
 				neonTxIx, err = DecodeNeonTxGas(dataList)
 				if err != nil {
-					return nil, err
+					return nil, false, neonTxHash, neonTxIx, err
 				}
-			} else {
-				return nil, errors.New("transaction GAS encountered twice")
 			}
 		case name == "ENTER":
 			// decode eth event log
 			_, err := DecodeNeonTxEnter(dataList)
 			if err != nil {
-				return nil, err
+				return nil, false, neonTxHash, neonTxIx, err
 			}
 			// if the segment ends with revert, skip it
 			var exitCode, endingInd int
-			exitCode, endingInd, err = GetEnterExitCode(ind, logMessages);
-
-			// check error for unfinished enter call
-			if err != nil {
-				fmt.Println("Error on finding end of enter call")
-				return nil, nil
-			}
+			exitCode, endingInd = GetEnterExitCode(ind, logMessages);
 
 			// omit inside segment if the segment ends with revert
 			if exitCode == ExitRevert {
 				ind = endingInd + 1
 			}
 		case name == "EXIT":
-			// decode eth event log
-			neonTxEvent, err := DecodeNeonTxExit(dataList)
-			if err != nil {
-				return nil, err
-			}
-
-			// if the segment reverted return empty logs for the segment
-			if neonTxEvent.eventType == ExitRevert {
-				return nil, nil
-			}
+			continue
 		case len(name) >= 3 && name[0:3] == "LOG":
 			logNum, err := strconv.Atoi(name[3:])
 			if err != nil {
-				return nil, err
+				return nil, false, neonTxHash, neonTxIx, err
 			}
 			// decode eth event log
 			neonTxEvent, err := DecodeNeonTxEvent(logNum, dataList)
 			if err != nil {
-				return nil, err
+				return nil, false, neonTxHash, neonTxIx, err
 			}
 			// add new log to client response data
 			neonTxEvent.transactionHash = neonTxHash
-			neonTxEvent.callLevel = evmCallDepth
 			neonTxEventList = append(neonTxEventList, *neonTxEvent)
 		default:
 			continue
 		}
 	}
 
-	// if the call stack is not finished skip tx
-	if evmCallDepth != 0 || nonEvmCallDepth != 0 {
-		return nil, nil
+
+	// check if transaction is one of the iterations of eth transaction
+	/*
+		case 1: the iteration is the last iteration with RETURN instruction and the total gas.
+		Note that we use the totalGasUsed value from this transaction as the target.
+		We sum up all the other iteration gas usage and when the sum is equal to the totalGasUsed from this iteration
+		it means we have collected all the iterations of the eth transaction.
+	*/
+	if neonTxReturn != nil && neonTxIx.gasUsed != neonTxIx.totalGasUsed {
+		/*
+			set the gas usage target of the eth transaction.
+			When the sum of all iteration gas usage reaches this value we know we have collected all the iterations.
+		*/
+		v := splitTransactions["0x" + hex.EncodeToString(neonTxHash)]
+		v.targetTotalGas = neonTxIx.totalGasUsed
+		splitTransactions["0x" + hex.EncodeToString(neonTxHash)] = v
+
+		return nil, true, neonTxHash, neonTxIx, nil
 	}
 
-	return neonTxEventList, nil
+	/*
+		case 2: one of the other iteration except the last iteration with RETURN instruction.
+		In this case we have no RETURN instruction which basically means that it's already iteration type,
+		but also we check that we have information about gas usage to be able to order
+		the iterations according to gas usage in the and before processing them together.
+  */
+	if (neonTxReturn == nil && neonTxIx != nil) {
+		return nil, true, neonTxHash, neonTxIx, nil
+	}
+
+	return neonTxEventList, false, neonTxHash, neonTxIx, nil
 }
 
-func GetBlockHash(slot int, solanaWebsocketEndpoint string) (string, error) {
+// at this point we know we have collected all the iteration log messages, we sort and process it as one eth transaction log
+func processSplitTransaction(txHash string, usedGas *NeonLogTxIx, logMessages []string) ([]NeonLogTxEvent, error) {
+
+	// append new iteration log messages
+	logData := splitTransactions[txHash]
+	logData.totalUsedGas += usedGas.gasUsed
+	if logData.logIterations == nil {
+		logData.logIterations = make([]LogData, 0)
+	}
+	logData.logIterations = append(logData.logIterations, LogData{usedGas: usedGas.totalGasUsed, logs: logMessages})
+	splitTransactions[txHash] = logData
+
+	// check condition if we have collected all the iterations
+	if logData.totalUsedGas == logData.targetTotalGas {
+		fmt.Println("processing iterations")
+		// remove processed data from map
+		defer delete(splitTransactions, txHash)
+
+		// Sort by age, keeping original order or equal elements.
+		sort.SliceStable(logData.logIterations, func(i, j int) bool {
+			return logData.logIterations[i].usedGas < logData.logIterations[j].usedGas
+		})
+
+		// combine all the iteration logs
+		logMessages := make([]string, 0)
+		for _, messages := range logData.logIterations {
+			logMessages = append(logMessages, messages.logs...)
+		}
+
+		// parse combined log messages from all the iterations
+		logs, _, _, _, err := parseLogs(logMessages)
+		if err != nil {
+			return nil, err
+		}
+
+		return logs, nil
+	}
+
+	return nil, nil
+}
+
+// get block hash for given slot number to fill log data
+func GetBlockHash(blockHashes map[int]string, slot int, solanaWebsocketEndpoint string) (string, error) {
+	// check if we have already queried
+	if val, ok := blockHashes[slot]; ok == true {
+		return val, nil
+	}
+
 	// get block with given slot
 	response, err := jsonRPC([]byte(`{
 		"jsonrpc": "2.0","id":1,
@@ -757,6 +772,9 @@ func GetBlockHash(slot int, solanaWebsocketEndpoint string) (string, error) {
 	if blockHeader.Error != nil {
 		return "", errors.New(blockHeader.Error.Message)
 	}
+
+	// save in cache
+	blockHashes[slot] = utils.Base58stringToHex(blockHeader.Result.Blockhash)
 
 	return utils.Base58stringToHex(blockHeader.Result.Blockhash), nil
 }
