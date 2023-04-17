@@ -21,6 +21,7 @@ const (
 	MemPool
 	Proxy
 	Subscriber
+	WsSubscriber
 	KeyManager
 	WebSocket
 	AirDropper
@@ -29,7 +30,7 @@ const (
 )
 
 var (
-	allRoles []Role = []Role{Indexer, MemPool, Proxy, Subscriber, KeyManager, WebSocket, AirDropper}
+	allRoles []Role = []Role{Indexer, MemPool, Proxy, Subscriber, WsSubscriber, KeyManager, WebSocket, AirDropper}
 )
 
 func (r Role) String() string {
@@ -42,6 +43,8 @@ func (r Role) String() string {
 		return "proxy"
 	case Subscriber:
 		return "subscriber"
+	case WsSubscriber:
+		return "wssubscriber"
 	case KeyManager:
 		return "keymanager"
 	case WebSocket:
@@ -62,6 +65,8 @@ func FromString(name string) Role {
 		return Proxy
 	case "subscriber":
 		return Subscriber
+	case "wssubscriber":
+		return WsSubscriber
 	case "keymanager":
 		return KeyManager
 	case "websocket":
