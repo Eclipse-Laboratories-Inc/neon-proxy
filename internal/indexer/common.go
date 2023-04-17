@@ -2,10 +2,72 @@ package indexer
 
 import (
 	"fmt"
+	"github.com/gagliardetto/solana-go"
+	"github.com/gagliardetto/solana-go/rpc"
+	"hash/fnv"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+type SolTxMetaDict struct {
+	txMetaDict map[SolTxSigSlotInfo]*SolTxMetaInfo
+}
+
+func NewSolTxMetaDict() *SolTxMetaDict {
+	return &SolTxMetaDict{
+		txMetaDict: make(map[SolTxSigSlotInfo]*SolTxMetaInfo),
+	}
+}
+
+func (s *SolTxMetaDict) HasSig(sigSlot SolTxSigSlotInfo) bool {
+	_, ok := s.txMetaDict[sigSlot]
+	return ok
+}
+
+func (s *SolTxMetaDict) Add(sigSlot SolTxSigSlotInfo, txMeta *SolTxReceipt) error {
+	if txMeta == nil {
+		return fmt.Errorf("solana receipt %v not found", sigSlot.SolSign)
+	}
+
+	tx, err := txMeta.Transaction.GetTransaction()
+	if err != nil {
+		return err
+	}
+
+	var signature solana.Signature
+	if tx.Signatures != nil {
+		signature = tx.Signatures[0]
+	}
+
+	if int(txMeta.Slot) != sigSlot.BlockSlot {
+		return fmt.Errorf("solana receipt %v on another history branch: sugnature %v, block slot %v", sigSlot, signature, txMeta.Slot)
+
+	}
+
+	s.txMetaDict[sigSlot] = SolTxMetaInfoFromResponse(sigSlot, txMeta)
+	return nil
+}
+
+func (s *SolTxMetaDict) Get(sigSlot SolTxSigSlotInfo) (*SolTxMetaInfo, error) {
+	meta, ok := s.txMetaDict[sigSlot]
+	if !ok {
+		return nil, fmt.Errorf("no solana receipt for the signature %v", sigSlot.SolSign)
+	}
+	return meta, nil
+}
+
+func (s *SolTxMetaDict) Delete(sigSlot SolTxSigSlotInfo) {
+	delete(s.txMetaDict, sigSlot)
+}
+
+func (s *SolTxMetaDict) Keys() []SolTxSigSlotInfo {
+	keys := make([]SolTxSigSlotInfo, 0)
+	for key := range s.txMetaDict {
+		keys = append(keys, key)
+	}
+	return keys
+}
 
 type SolTxSigSlotInfo struct {
 	SolSign   string
@@ -15,19 +77,60 @@ type SolTxSigSlotInfo struct {
 	str  string
 }
 
+func (st SolTxSigSlotInfo) String() string {
+	if st.str == "" {
+		st.str = fmt.Sprintf("%v:%v", st.BlockSlot, st.SolSign)
+	}
+	return st.str
+}
+
+func (st SolTxSigSlotInfo) Hash() (int, error) {
+	h := fnv.New32a()
+	_, err := h.Write([]byte(st.String()))
+	if err != nil {
+		return 0, err
+	}
+	return int(h.Sum32()), nil
+}
+
+type SolTxReceipt rpc.GetTransactionResult
+
 type SolTxMetaInfo struct {
 	ident SolTxSigSlotInfo
 
 	blockSlot int
-	tx        map[string]string
+	tx        *SolTxReceipt
 
 	str   string
 	reqID string
 }
 
-func NewSolTxMetaInfoFromEndRange(blockSlot int, commitment string) *SolTxMetaInfo {
-	// todo implement
+func SolTxMetaInfoFromEndRange() *SolTxMetaInfo {
+	// TODO implement me properly
 	return &SolTxMetaInfo{}
+}
+
+func SolTxMetaInfoFromResponse(slotInfo SolTxSigSlotInfo, resp *SolTxReceipt) *SolTxMetaInfo {
+	return &SolTxMetaInfo{
+		ident:     slotInfo,
+		blockSlot: slotInfo.BlockSlot,
+		tx:        resp,
+	}
+}
+
+func (stm *SolTxMetaInfo) GetReqID() string {
+	if stm.reqID == "" {
+		stm.reqID = fmt.Sprintf("%s%d", stm.ident.SolSign[:7], stm.blockSlot)
+	}
+	return stm.reqID
+}
+
+func (stm *SolTxMetaInfo) String() string {
+	// TODO implement after implementing str_fmt_object (task ...)
+	/*	if stm.str == "" {
+		stm.str = str_fmt_object(stm.ident)
+	}*/
+	return stm.str
 }
 
 type Status int
@@ -50,29 +153,7 @@ type SolIxLogState struct {
 	innerLogs []SolIxLogState
 }
 
-type SolTxCostInfo struct {
-	solSign   string
-	blockSlot int
-	operator  string
-	solSpent  int
-
-	str            string
-	calculatedStat bool
-}
-
-type SolTxLogDecoder struct{} //todo move to decoder?
-type NeonLogTxReturn struct {
-	Cancled bool
-} // todo move to decoder?
-
-type Ident struct {
-	solSign   string
-	blockSlot int
-	idx       int
-	innerIdx  int
-}
-
-type SolNeonIxReceiptInfo struct {
+type SolIxMetaInfo struct {
 	ix       map[string]string
 	idx      int
 	innerIdx int
@@ -90,8 +171,32 @@ type SolNeonIxReceiptInfo struct {
 	neonGasUsed      int
 	neonTotalGasUsed int
 
-	neonTxReturn *NeonLogTxReturn
+	neonTxReturn NeonLogTxReturn
 	neonTxEvents []NeonLogTxEvent
+}
+
+type SolTxCostInfo struct {
+	solSign   string
+	blockSlot int
+	operator  string
+	solSpent  int
+
+	str            string
+	calculatedStat bool
+}
+
+type SolTxLogDecoder struct{} //todo move to decoder?
+type NeonLogTxReturn struct{} // todo move to decoder?
+
+type Ident struct {
+	solSign   string
+	blockSlot int
+	idx       int
+	innerIdx  int
+}
+
+type SolNeonIxReceiptInfo struct {
+	metaInfo SolIxMetaInfo
 
 	solSign   string
 	blockSlot int
@@ -149,9 +254,4 @@ func InsertBatchImpl(indexerDB DBInterface, pCounter prometheus.Counter, data []
 	}
 	pCounter.Add(float64(len(data)))
 	return res.LastInsertId()
-}
-
-func str_fmt_object(obj interface{}, skip_underling bool) string {
-	//todo implement with decoder
-	return ""
 }
