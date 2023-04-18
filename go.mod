@@ -7,13 +7,16 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gagliardetto/solana-go v1.8.1
 	github.com/gorilla/websocket v1.4.2
+	github.com/jackc/pgx/v5 v5.3.1
 	github.com/lib/pq v1.10.7
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.8.1
 	github.com/urfave/cli/v2 v2.20.3
+	golang.org/x/exp v0.0.0-20230307190834-24139beb5833
 	google.golang.org/grpc v1.53.0
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
@@ -33,7 +36,6 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
-	github.com/jackc/pgx/v5 v5.3.1 // indirect
 	github.com/jackc/puddle/v2 v2.2.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
@@ -50,6 +52,7 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
+	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/streamingfast/logging v0.0.0-20220405224725-2755dab2ce75 // indirect
 	github.com/teris-io/shortid v0.0.0-20201117134242-e59966efd125 // indirect
@@ -63,7 +66,6 @@ require (
 	go.uber.org/ratelimit v0.2.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.6.0 // indirect
-	golang.org/x/exp v0.0.0-20230307190834-24139beb5833 // indirect
 	golang.org/x/net v0.6.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
@@ -71,6 +73,5 @@ require (
 	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
