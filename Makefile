@@ -27,8 +27,5 @@ run-mempool:
 run-subscriber:
 	./bin/neon-subscriber
 
-run-wssubscriber:
-	./bin/neon-wssubscriber
-
-# Empty rule for force run some targets always.
+# Empty rule for force run some targets always. 
 FORCE:
