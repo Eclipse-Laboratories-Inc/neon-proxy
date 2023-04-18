@@ -14,6 +14,7 @@ import (
 	"github.com/neonlabsorg/neon-proxy/pkg/event"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"github.com/neonlabsorg/neon-proxy/pkg/metrics"
+	"github.com/neonlabsorg/neon-proxy/pkg/postgres"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
 	"github.com/urfave/cli/v2"
 )
@@ -53,15 +54,17 @@ func (e PostServiceOnlineEvent) ServiceName() string {
 var Version string
 
 type Service struct {
-	env             string
-	name            string
-	version         string
-	ctx             context.Context
-	cliApp          *cli.App
-	cliContext      *cli.Context
-	loggerManager   *LoggerManager
-	solanaRpcClient *rpc.Client
-	handlers        []func(service *Service)
+	env              string
+	name             string
+	version          string
+	gatherStatistics bool
+	ctx              context.Context
+	cliApp           *cli.App
+	cliContext       *cli.Context
+	loggerManager    *LoggerManager
+	dbManager        *DatabaseManager
+	solanaRpcClient  *rpc.Client
+	handlers         []func(service *Service)
 }
 
 func CreateService(
@@ -82,9 +85,10 @@ func CreateService(
 	}
 
 	s := &Service{
-		env:     env,
-		name:    configuration.Name,
-		version: Version,
+		env:              env,
+		name:             configuration.Name,
+		version:          Version,
+		gatherStatistics: configuration.GatherStatistics,
 	}
 
 	s.initContext()
@@ -97,6 +101,11 @@ func CreateService(
 	}
 
 	s.initCommunicationProtocol(configuration.CommunicationProtocol)
+
+	s.dbManager, err = NewDatabaseManager(s.GetContext(), configuration.Storage, s.GetLogger())
+	if err != nil {
+		panic(err)
+	}
 
 	postCreated := PostServiceStartedEvent{serviceName: s.name}
 	event.DispatcherInstance().Notify(postCreated)
@@ -259,6 +268,11 @@ func (s *Service) initCommunicationProtocol(cfg *configuration.CommunicationProt
 	}()
 }
 
+func (s *Service) ShutDown() {
+	// todo Shut Down all needed services
+	s.dbManager.ShutDown()
+}
+
 func (s *Service) ModifyCliApp(handler func(cliApp *cli.App)) {
 	handler(s.cliApp)
 }
@@ -285,4 +299,17 @@ func (s *Service) GetLogger() logger.Logger {
 
 func (s *Service) GetSolanaRpcClient() *rpc.Client {
 	return s.solanaRpcClient
+}
+
+func (s *Service) GetDB(name string) (*postgres.Connector, error) {
+	// here you can get any DB from any DBManager (postgress, clickhouse, mysql...)
+	return s.dbManager.GetPostgresManager().GetDB(name)
+}
+
+func (s *Service) GetPool(name string) (*postgres.PoolConnector, error) {
+	return s.dbManager.GetPostgresManager().getPoolConnector(name)
+}
+
+func (s *Service) GatherStatistics() bool {
+	return s.gatherStatistics
 }

@@ -36,3 +36,7 @@ func NewDatabaseManager(
 func (m *DatabaseManager) GetPostgresManager() *PostgresManager {
 	return m.postgresManager
 }
+
+func (m *DatabaseManager) ShutDown() {
+	m.postgresManager.ShutDown()
+}

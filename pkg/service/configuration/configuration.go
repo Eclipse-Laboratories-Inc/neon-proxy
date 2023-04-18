@@ -1,9 +1,16 @@
 package configuration
 
+import (
+	"fmt"
+	"os"
+	"strings"
+)
+
 // SERVICE CONFIGURATION
 type ServiceConfiguration struct {
 	Name                  string
 	IsConsoleApp          bool
+	GatherStatistics      bool
 	Logger                *LoggerConfiguration
 	Storage               *StorageConfiguration
 	MetricsServer         *MetricsServerConfiguration
@@ -21,6 +28,11 @@ func NewServiceConfiguration(cfg *Config) (serviceConfiguration *ServiceConfigur
 		CommunicationProtocol: &CommunicationProtocolConfiguration{
 			RelativeConfigs: make(map[Role][]ProtocolConfiguration),
 		},
+	}
+
+	gatherStatistics := strings.ToLower(os.Getenv(fmt.Sprintf("NS_%s_GATHER_STATISTICS", cfg.Name)))
+	if gatherStatistics == "true" || gatherStatistics == "t" || gatherStatistics == "1" {
+		serviceConfiguration.GatherStatistics = true
 	}
 
 	if err = serviceConfiguration.loadLoggerConfiguration(); err != nil {

@@ -2,6 +2,7 @@ package solana
 
 import (
 	"context"
+
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
