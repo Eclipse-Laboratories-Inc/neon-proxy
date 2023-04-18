@@ -1,0 +1,47 @@
+// to generate proto use:  `protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/gRPC/event.proto`
+syntax = "proto3";
+
+package gRPC;
+
+option go_package = "github.com/neonlabsorg/neon-proxy;gRPC";
+
+import "google/protobuf/timestamp.proto";
+
+service Event {
+  rpc AfterCreate (OnCreate) returns (Response) {}
+  rpc BeforeShutDown(OnShutDown) returns (Response) {}
+  rpc HealthCheck(OnHealthCheck) returns (Response) {}
+  rpc GetInstances(RoleData) returns (Instances) {}
+}
+
+message OnCreate {
+    Instance instance = 1;
+}
+
+message OnShutDown {
+    Instance instance = 1;
+}
+
+message OnHealthCheck {
+    Instance instance = 1;
+}
+
+message Response {
+  bool success = 1;
+}
+
+message Instance {
+    int32 role = 1;
+    string id = 2;
+    string ip = 3;
+    string cluster = 4;
+    google.protobuf.Timestamp createdAt = 5;
+}
+
+message RoleData {
+    int32 role = 1;
+}
+
+message Instances {
+    repeated Instance items = 1;
+}

@@ -2,11 +2,12 @@ package configuration
 
 // SERVICE CONFIGURATION
 type ServiceConfiguration struct {
-	Name          string
-	IsConsoleApp  bool
-	Logger        *LoggerConfiguration
-	Storage       *StorageConfiguration
-	MetricsServer *MetricsServerConfiguration
+	Name                  string
+	IsConsoleApp          bool
+	Logger                *LoggerConfiguration
+	Storage               *StorageConfiguration
+	MetricsServer         *MetricsServerConfiguration
+	CommunicationProtocol *CommunicationProtocolConfiguration
 }
 
 // INIT CONFIGURATION
@@ -16,6 +17,9 @@ func NewServiceConfiguration(cfg *Config) (serviceConfiguration *ServiceConfigur
 		IsConsoleApp: cfg.IsConsoleApp,
 		Storage: &StorageConfiguration{
 			Postgres: make(map[string]*PostgresConfiguration),
+		},
+		CommunicationProtocol: &CommunicationProtocolConfiguration{
+			RelativeConfigs: make(map[Role][]ProtocolConfiguration),
 		},
 	}
 
@@ -28,6 +32,10 @@ func NewServiceConfiguration(cfg *Config) (serviceConfiguration *ServiceConfigur
 	}
 
 	if err = serviceConfiguration.loadMetricsServerConfiguration(cfg.Name); err != nil {
+		return nil, err
+	}
+
+	if err = serviceConfiguration.loadCommunicationProtocolConfiguration(cfg.Name); err != nil {
 		return nil, err
 	}
 
