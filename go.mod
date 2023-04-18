@@ -1,10 +1,12 @@
 module github.com/neonlabsorg/neon-proxy
 
-go 1.19
+go 1.20
 
 require (
+	github.com/btcsuite/btcutil v1.0.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gagliardetto/solana-go v1.8.1
+	github.com/gorilla/websocket v1.4.2
 	github.com/lib/pq v1.10.7
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
