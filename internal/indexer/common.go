@@ -2,11 +2,10 @@ package indexer
 
 import (
 	"fmt"
-	"hash/fnv"
-	"strings"
-
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
+	"hash/fnv"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -71,7 +70,7 @@ func (s *SolTxMetaDict) Keys() []SolTxSigSlotInfo {
 }
 
 type SolTxSigSlotInfo struct {
-	SolSign   string
+	SolSign   solana.Signature
 	BlockSlot int
 
 	hash int

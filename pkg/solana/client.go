@@ -2,7 +2,6 @@ package solana
 
 import (
 	"context"
-
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
@@ -35,15 +34,22 @@ func (c *Client) IsHealth(ctx context.Context) (bool, error) {
 
 func (c *Client) GetSignListForAddress(
 	ctx context.Context, addr solana.PublicKey,
-	limit *int, before, until [64]byte, commitmentType rpc.CommitmentType,
+	limit *int, before, until *solana.Signature, commitmentType rpc.CommitmentType,
 	minContextSlot *uint64) ([]*rpc.TransactionSignature, error) {
-	return c.conn.GetSignaturesForAddressWithOpts(ctx, addr, &rpc.GetSignaturesForAddressOpts{
+	opts := &rpc.GetSignaturesForAddressOpts{
 		Limit:          limit,
-		Before:         before,
-		Until:          until,
 		Commitment:     commitmentType,
 		MinContextSlot: minContextSlot,
-	})
+	}
+	if before != nil {
+		opts.Before = *before
+	}
+
+	if until != nil {
+		opts.Until = *until
+	}
+
+	return c.conn.GetSignaturesForAddressWithOpts(ctx, addr, opts)
 }
 
 func (c *Client) GetBlockInfoBySlot(ctx context.Context, slot uint64,
