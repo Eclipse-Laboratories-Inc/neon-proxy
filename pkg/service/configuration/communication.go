@@ -86,7 +86,7 @@ type ProtocolConfiguration struct {
 	CreatedAt  time.Time
 }
 
-// LOAD COMMUNICATION PROTOCOL CONFIGURATION
+// LOAD COMMUNICATION  PROTOCOL CONFIGURATION
 func (c *ProtocolConfiguration) LoadProtocolConfig(name string, index int) (err error) {
 	name = strings.ToUpper(name)
 	c.CreatedAt = time.Now().UTC()
