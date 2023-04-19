@@ -10,10 +10,7 @@ import (
 )
 
 var (
-	ErrLogFilterInvalidDataTypes    = errors.New("invalid log filter: data types must start with 0x")
-	ErrLogFilterInvalidTopicsString = errors.New("invalid log filter: invalid field topics: string")
-	ErrLogFilterInvalidTopicsNumber = errors.New("invalid log filter: invalid field topics: number")
-	ErrLogFilterInvalidHexCharacter = errors.New("invalid log filter: invalid hex string, invalid character")
+	ErrLogFilterInvalid = errors.New("Invalid topic")
 )
 
 // to be implemented
@@ -94,17 +91,21 @@ func (c *Client) buildFilters(params SubscribeLogsFilterParams) error {
 				t = append(t, topics.(string))
 				c.logsFilters.Topics = append(c.logsFilters.Topics, t)
 			} else {
-				return errors.New("Invalid topic ")
+				return errors.New("Invalid topic")
 			}
 		case []interface{}:
-			parsedTopics := make([]string, 0)
 			for _, ta := range topics.([]interface{}) {
 				switch ta.(type) {
 				case string:
-					parsedTopics = append(parsedTopics, ta.(string))
+					if utils.IsTopicValid(ta.(string)) {
+						t := make([]string, 0)
+						t = append(t, ta.(string))
+						c.logsFilters.Topics = append(c.logsFilters.Topics, t)
+					} else {
+						return errors.New("Invalid topic")
+					}
 				}
 			}
-			c.logsFilters.Topics = append(c.logsFilters.Topics, parsedTopics)
 		}
 	}
 
