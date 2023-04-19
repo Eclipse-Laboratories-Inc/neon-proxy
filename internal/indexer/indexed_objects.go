@@ -94,7 +94,7 @@ type TxInfoKey struct {
 }
 
 func NewTxInfoKey(solNeonIx SolNeonIxReceiptInfo) TxInfoKey {
-	sign := solNeonIx.neonTxSig
+	sign := solNeonIx.metaInfo.neonTxSig
 	if sign[:2] == "0x" {
 		sign = sign[2:]
 	}
@@ -116,7 +116,7 @@ type TxInfoDataChunk struct {
 }
 
 func (t *TxInfoDataChunk) String() string {
-	return str_fmt_object(t, true)
+	return "" // todo implement
 }
 
 func (t *TxInfoDataChunk) IsValid() bool {
@@ -535,7 +535,7 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 			if err != nil {
 				log.Fatal(err)
 			}
-			neonIncome = solNeonIx.neonGasUsed * int(decimal_num)
+			neonIncome = solNeonIx.metaInfo.neonGasUsed * int(decimal_num)
 		}
 
 		solSpent := 0
@@ -548,15 +548,15 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 
 		stat.neonIncome += neonIncome
 		stat.neonStepCnt += solNeonIx.neonStepCnt
-		stat.bpfCycleCnt += solNeonIx.usedBpfCycleCnt
+		stat.bpfCycleCnt += solNeonIx.metaInfo.usedBpfCycleCnt
 
 		if isOpSolNeonIx {
 			stat.opSolSpent += solSpent
 			stat.opNeonIncome += neonIncome
 		}
 
-		if solNeonIx.neonTxReturn != nil {
-			if solNeonIx.neonTxReturn.Cancled {
+		if solNeonIx.metaInfo.neonTxReturn != nil {
+			if solNeonIx.metaInfo.neonTxReturn.Cancled {
 				stat.canceledNeonTxCnt++
 				if isOpSolNeonIx {
 					stat.opCanceledNeonTxCnt++

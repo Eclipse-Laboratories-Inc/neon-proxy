@@ -2,10 +2,11 @@ package indexer
 
 import (
 	"fmt"
-	"github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/rpc"
 	"hash/fnv"
 	"strings"
+
+	"github.com/gagliardetto/solana-go"
+	"github.com/gagliardetto/solana-go/rpc"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -99,15 +100,11 @@ type SolTxMetaInfo struct {
 	ident SolTxSigSlotInfo
 
 	blockSlot int
+	solSign   string
 	tx        *SolTxReceipt
 
 	str   string
 	reqID string
-}
-
-func SolTxMetaInfoFromEndRange() *SolTxMetaInfo {
-	// TODO implement me properly
-	return &SolTxMetaInfo{}
 }
 
 func SolTxMetaInfoFromResponse(slotInfo SolTxSigSlotInfo, resp *SolTxReceipt) *SolTxMetaInfo {
@@ -116,6 +113,19 @@ func SolTxMetaInfoFromResponse(slotInfo SolTxSigSlotInfo, resp *SolTxReceipt) *S
 		blockSlot: slotInfo.BlockSlot,
 		tx:        resp,
 	}
+}
+
+func NewSolTxMetaInfoFromEndRange(blockSlot int, commitment string) *SolTxMetaInfo {
+	ident := SolTxSigSlotInfo{
+		BlockSlot: blockSlot,
+		SolSign:   fmt.Sprintf("end-%v", commitment),
+	}
+	return &SolTxMetaInfo{
+		ident:     ident,
+		blockSlot: blockSlot,
+		solSign:   ident.SolSign,
+	}
+
 }
 
 func (stm *SolTxMetaInfo) GetReqID() string {
@@ -171,7 +181,7 @@ type SolIxMetaInfo struct {
 	neonGasUsed      int
 	neonTotalGasUsed int
 
-	neonTxReturn NeonLogTxReturn
+	neonTxReturn *NeonLogTxReturn
 	neonTxEvents []NeonLogTxEvent
 }
 
@@ -186,7 +196,9 @@ type SolTxCostInfo struct {
 }
 
 type SolTxLogDecoder struct{} //todo move to decoder?
-type NeonLogTxReturn struct{} // todo move to decoder?
+type NeonLogTxReturn struct {
+	Cancled bool
+} // todo move to decoder?
 
 type Ident struct {
 	solSign   string
