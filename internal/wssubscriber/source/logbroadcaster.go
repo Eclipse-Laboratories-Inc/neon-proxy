@@ -569,6 +569,9 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 	var err error
 	// we encounter non evm calls inside evm call segment so we remember the current depth of such calls
 	var nonEvmCallDepth int
+	// count the number of enter calls
+	var evmCallDepth int
+
 
 	neonTxEventList := make([]NeonLogTxEvent, 0)
 	// for each solana transaction log message decode eth data
@@ -626,6 +629,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 				}
 			}
 		case name == "ENTER":
+			evmCallDepth++
 			// decode eth event log
 			_, err := DecodeNeonTxEnter(dataList)
 			if err != nil {
@@ -640,6 +644,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 				ind = endingInd + 1
 			}
 		case name == "EXIT":
+			evmCallDepth--
 			continue
 		case len(name) >= 3 && name[0:3] == "LOG":
 			logNum, err := strconv.Atoi(name[3:])
@@ -687,6 +692,10 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
   */
 	if (neonTxReturn == nil && neonTxIx != nil) {
 		return nil, true, neonTxHash, neonTxIx, nil
+	}
+
+	if evmCallDepth != 0 {
+		return nil, false, neonTxHash, neonTxIx, errors.New("neon function call stack unfinished")
 	}
 
 	return neonTxEventList, false, neonTxHash, neonTxIx, nil
