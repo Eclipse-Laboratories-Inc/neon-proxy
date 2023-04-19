@@ -40,7 +40,7 @@ func (s *SolTxMetaDict) Add(sigSlot SolTxSigSlotInfo, txMeta *SolTxReceipt) erro
 		signature = tx.Signatures[0]
 	}
 
-	if int(txMeta.Slot) != sigSlot.BlockSlot {
+	if txMeta.Slot != sigSlot.BlockSlot {
 		return fmt.Errorf("solana receipt %v on another history branch: sugnature %v, block slot %v", sigSlot, signature, txMeta.Slot)
 
 	}
@@ -57,6 +57,15 @@ func (s *SolTxMetaDict) Get(sigSlot SolTxSigSlotInfo) (*SolTxMetaInfo, error) {
 	return meta, nil
 }
 
+func (s *SolTxMetaDict) Pop(sigSlot SolTxSigSlotInfo) (*SolTxMetaInfo, error) {
+	info, err := s.Get(sigSlot)
+	if err != nil {
+		return nil, err
+	}
+	s.Delete(sigSlot)
+	return info, nil
+}
+
 func (s *SolTxMetaDict) Delete(sigSlot SolTxSigSlotInfo) {
 	delete(s.txMetaDict, sigSlot)
 }
@@ -71,7 +80,7 @@ func (s *SolTxMetaDict) Keys() []SolTxSigSlotInfo {
 
 type SolTxSigSlotInfo struct {
 	SolSign   solana.Signature
-	BlockSlot int
+	BlockSlot uint64
 
 	hash int
 	str  string
@@ -98,7 +107,7 @@ type SolTxReceipt rpc.GetTransactionResult
 type SolTxMetaInfo struct {
 	ident SolTxSigSlotInfo
 
-	blockSlot int
+	blockSlot uint64
 	tx        *SolTxReceipt
 
 	str   string

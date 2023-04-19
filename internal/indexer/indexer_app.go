@@ -8,10 +8,11 @@ import (
 )
 
 type IndexerApp struct {
-	ctx       context.Context
-	logger    logger.Logger
-	db        *IndexerDB
-	collector *Collector
+	ctx                context.Context
+	logger             logger.Logger
+	db                 *IndexerDB
+	finalizedCollector CollectorInterface
+	ConfirmedCollector CollectorInterface
 
 	gatherStatistics  bool
 	skipCancelTimeout int

@@ -60,9 +60,9 @@ Other components:
 
 When finalized collector starts (~FinalizedSolTxMetaCollector~), collector will get the last block of the finalized part of the history and iterate throuht all blocks of it.
 
-Collector have different logic for processing finalized and confirmed data.
+ConfirmedCollector have different logic for processing finalized and confirmed data.
 
-Collector ask Solana for getting the list of transactions signatures, which were executed for address throught rpc-request ~getSignaturesForAddress~ (see Solana documentation). It's Solana-address of our NEON EVM. [TODO:gmm] - for what?
+ConfirmedCollector ask Solana for getting the list of transactions signatures, which were executed for address throught rpc-request ~getSignaturesForAddress~ (see Solana documentation). It's Solana-address of our NEON EVM. [TODO:gmm] - for what?
 
 This rpc api call returns limited list of signatures backward in time. Becouse of that, when we need more deeper in history we need ask Solana with optinal parameters ~limit~ and ~before~. We use for it method ~_build_checkpoint_list~ in procedure iter_tx_meta.
 

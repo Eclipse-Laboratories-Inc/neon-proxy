@@ -11,9 +11,11 @@ import (
 
 // Config TODO implement
 type Config struct {
+	EvmLoaderID    solana2.PublicKey
+	IndexerPollCnt int
 }
 
-type сollector struct {
+type collector struct {
 	cfg    *Config
 	logger logger.Logger
 
@@ -23,13 +25,19 @@ type сollector struct {
 	isFinalized  bool
 }
 
-func NewCollector(cfg *Config,
+type CollectorInterface interface {
+	GetCommitment() rpc.CommitmentType
+	GetTxMeta(startSlot, stopSlot uint64) ([]*SolTxMetaInfo, error)
+	IsFinalized() bool
+}
+
+func newCollector(cfg *Config,
 	solanaClient *solana.Client,
 	logger logger.Logger,
 	dict *SolTxMetaDict,
 	commitment rpc.CommitmentType,
-	isFinalized bool) *сollector {
-	return &сollector{
+	isFinalized bool) *collector {
+	return &collector{
 		cfg:          cfg,
 		logger:       logger,
 		solanaClient: solanaClient,
@@ -39,17 +47,17 @@ func NewCollector(cfg *Config,
 	}
 }
 
-func (c *сollector) GetCommitment() rpc.CommitmentType {
+func (c *collector) GetCommitment() rpc.CommitmentType {
 	return c.commitment
 }
 
-func (c *сollector) IsFinalized() bool {
+func (c *collector) IsFinalized() bool {
 	return c.isFinalized
 }
 
 // requestTxMetaList gets solana signatures and requests for each signature tx receipt from solana
 // and adds info to txMetaDict
-func (c *сollector) requestTxMetaList(sigSlotList ...SolTxSigSlotInfo) error {
+func (c *collector) requestTxMetaList(sigSlotList ...SolTxSigSlotInfo) error {
 	var sigList []solana2.Signature
 	for _, sigSlot := range sigSlotList {
 		sigList = append(sigList, sigSlot.SolSign)
@@ -71,7 +79,7 @@ func (c *сollector) requestTxMetaList(sigSlotList ...SolTxSigSlotInfo) error {
 
 // gatherInfoIntoTxMetaDict gets grouped solana signatures and calls requestTxMetaList to get tx receipts for
 // each signature in each group
-func (c *сollector) gatherInfoIntoTxMetaDict(groupedSigSlotList [][]SolTxSigSlotInfo) {
+func (c *collector) gatherInfoIntoTxMetaDict(groupedSigSlotList [][]SolTxSigSlotInfo) {
 	if len(groupedSigSlotList) == 1 {
 		if err := c.requestTxMetaList(groupedSigSlotList[0]...); err != nil {
 			c.logger.Error().Err(err).Msg("error requesting tx receipt for signature")
@@ -93,7 +101,7 @@ func (c *сollector) gatherInfoIntoTxMetaDict(groupedSigSlotList [][]SolTxSigSlo
 	}
 }
 
-func (c *сollector) getTxMeta(sigSlotList []SolTxSigSlotInfo) ([]*SolTxMetaInfo, error) {
+func (c *collector) getTxMeta(sigSlotList []SolTxSigSlotInfo) ([]*SolTxMetaInfo, error) {
 	const groupLen = 20
 	filteredSigSlotList := make([]SolTxSigSlotInfo, 0, len(sigSlotList))
 
@@ -132,13 +140,13 @@ func (c *сollector) getTxMeta(sigSlotList []SolTxSigSlotInfo) ([]*SolTxMetaInfo
 
 // getSignInfoBySlot gets solana signatures for EvmLoaderID address for slots, which re between
 // startSlot and stopSlot till it reaches the stopSlot or will receive 0 signatures for slot
-func (c *сollector) getSignInfoBySlot(startSign *solana2.Signature, startSlot int64, stopSlot int64) ([]SolTxSigSlotInfo, error) {
+func (c *collector) getSignInfoBySlot(startSign *solana2.Signature, startSlot, stopSlot uint64) ([]SolTxSigSlotInfo, error) {
 	var result []SolTxSigSlotInfo
 	for {
 		responseList, err := c.solanaClient.GetSignListForAddress(
 			context.Background(),
 			c.cfg.EvmLoaderID,
-			c.cfg.IndexerPollCnt,
+			&c.cfg.IndexerPollCnt,
 			startSign,
 			nil,
 			c.GetCommitment(),
@@ -155,13 +163,13 @@ func (c *сollector) getSignInfoBySlot(startSign *solana2.Signature, startSlot i
 
 		for _, response := range responseList {
 			blockSlot := response.Slot
-			if blockSlot > uint64(startSlot) {
+			if blockSlot > startSlot {
 				continue
-			} else if blockSlot < uint64(stopSlot) {
+			} else if blockSlot < stopSlot {
 				return result, nil
 			}
 			result = append(result, SolTxSigSlotInfo{
-				BlockSlot: int(blockSlot),
+				BlockSlot: blockSlot,
 				SolSign:   response.Signature,
 			})
 		}
@@ -169,6 +177,6 @@ func (c *сollector) getSignInfoBySlot(startSign *solana2.Signature, startSlot i
 	return result, nil
 }
 
-func (c *сollector) RunSolanaTxs() {
+func (c *collector) RunSolanaTxs() {
 
 }
