@@ -23,11 +23,11 @@ const (
 
 type NeonLogTxEvent struct {
 	eventType LogTxEventType
-	Hidden    bool
+	hidden    bool
 
-	address string
-	topics  []string
-	data    string
+	address []byte
+	topics  [][]byte
+	data    []byte
 
 	solSig       string
 	idx          int
