@@ -28,7 +28,7 @@ run-subscriber:
 	./bin/neon-subscriber
 
 run-wssubscriber:
-	sh run-neon-wssubscriber.sh
+	./bin/neon-wssubscriber
 
 # Empty rule for force run some targets always.
 FORCE:
