@@ -116,7 +116,7 @@ type SubscriptionError struct {
 
 // subscription response from websocket
 type SubscribeJsonResponseRCP struct {
-	Version string `json:"json_rpc"`
+	Version string `json:"jsonrpc"`
 	ID      uint64 `json:"id"`
 	Result  string `json:"result,omitempty"`
 	Error   *SubscriptionError `json:"error,omitempty"`
@@ -124,7 +124,7 @@ type SubscribeJsonResponseRCP struct {
 
 // event type defines the data sent to the subscriber each time new event is caught
 type Event struct {
-	Version string `json:"json_rpc"`
+	Version string `json:"jsonrpc"`
 	Method  string `json:"method"`
 	Params  struct {
 		Subscription string      `json:"subscription"`
@@ -276,6 +276,12 @@ func (c *Client) unsubscribe(requestRPC SubscribeJsonRPC, responseRPC *Subscribe
 	// protect client vars
 	c.newHeadsLocker.Lock()
 	defer c.newHeadsLocker.Unlock()
+
+	// check for empty subscription id
+	if subscriptionID == "" {
+		responseRPC.Error = &SubscriptionError{Code: MethodNotFoundErrorCode, Message: "Subscription not found"}
+		return
+	}
 
 	// unsubscribe
 	if c.newHeadSubscriptionID == subscriptionID {
