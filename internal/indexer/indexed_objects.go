@@ -224,10 +224,10 @@ func (n *NeonIndexedTxInfo) CompleteEventList() {
 				}
 			}
 			isReverted = (revertedLevel != -1) || isFailed
-			isHidden = event.Hidden || isReverted
+			isHidden = event.hidden || isReverted
 		}
 		neonLogEvent := event.DeepCopy()
-		neonLogEvent.Hidden = isHidden
+		neonLogEvent.hidden = isHidden
 		neonLogEvent.reverted = isReverted
 		neonLogEvent.eventLevel = curLevel
 		neonLogEvent.eventOrder = curOrder
