@@ -31,6 +31,15 @@ const (
 	subscriptionNewHeads               = "newHeads"
 	subscriptionLogs                   = "logs"
 	subscriptionNewPendingTransactions = "newPendingTransactions"
+
+	//error codes
+	UnmarshalingErrorCode = -1
+	MethodNotFoundErrorCode = -32601
+	RequestIDErrorCode = -2
+	IncorrectNumberOfParametersErrorCode = -3
+	IncorrectParameterTypeErrorCode = -4
+	SubscriptionAlreadyActiveErrorCode = -5
+	IncorrectFilterErrorMessage = -6
 )
 
 // defining each connection parameters
@@ -98,12 +107,19 @@ type SubscribeLogsFilterParams struct {
 	Topics    []interface{} `json:"topics"`
 }
 
+
+// defines error returned to user
+type SubscriptionError struct {
+	Code int `json:"code"`
+	Message string `json:"message"`
+}
+
 // subscription response from websocket
 type SubscribeJsonResponseRCP struct {
 	Version string `json:"json_rpc"`
 	ID      uint64 `json:"id"`
 	Result  string `json:"result,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Error   *SubscriptionError `json:"error,omitempty"`
 }
 
 // event type defines the data sent to the subscriber each time new event is caught
@@ -172,7 +188,7 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
 	// unmarshal request
 	var requestRPC SubscribeJsonRPC
 	if err := json.Unmarshal(request, &requestRPC); err != nil {
-		responseRPC.Error = err.Error()
+		responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: err.Error()}
 		return
 	}
 
@@ -181,25 +197,25 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
 
 	// check rpc version
 	if requestRPC.Method != methodSubscription && requestRPC.Method != methodUnsubscription {
-		responseRPC.Error = "method incorrect"
+		responseRPC.Error = &SubscriptionError{Code: MethodNotFoundErrorCode, Message: "The method " + requestRPC.Method + " does not exist/is not available"}
 		return
 	}
 
 	// check request id to be valid
 	if requestRPC.ID == 0 {
-		responseRPC.Error = "id must be greater than 0"
+		responseRPC.Error = &SubscriptionError{Code: RequestIDErrorCode, Message: "id must be greater than 0"}
 		return
 	}
 
 	// check params
 	if len(requestRPC.Params) < 1 {
-		responseRPC.Error = "Incorrect subscription parameters"
+		responseRPC.Error = &SubscriptionError{Code: IncorrectNumberOfParametersErrorCode, Message: "Incorrect subscription parameters"}
 		return
 	}
 
 	// check subscription type is correct
 	if reflect.TypeOf(requestRPC.Params[0]).Name() != "string" {
-		responseRPC.Error = "Incorrect parameter 0"
+		responseRPC.Error = &SubscriptionError{Code: IncorrectParameterTypeErrorCode, Message: "Incorrect first parameter type"}
 		return
 	}
 
@@ -214,7 +230,7 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
 	case requestRPC.Params[0].(string) == subscriptionNewPendingTransactions:
 		c.subscribeToNewPendingTransactions(requestRPC, &responseRPC)
 	default:
-		responseRPC.Error = "subscription type not found"
+		responseRPC.Error = &SubscriptionError{Code: MethodNotFoundErrorCode, Message: "The method " + requestRPC.Method + " does not exist/is not available"}
 		return
 	}
 
@@ -285,7 +301,7 @@ func (c *Client) unsubscribe(requestRPC SubscribeJsonRPC, responseRPC *Subscribe
 		return
 	}
 
-	responseRPC.Error = "Subscription not found"
+	responseRPC.Error = &SubscriptionError{Code: MethodNotFoundErrorCode, Message: "Subscription not found"}
 	return
 }
 
