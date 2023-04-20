@@ -21,7 +21,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 
 	// check if subscription type for the client is active
 	if c.newLogsIsActive {
-		responseRPC.Error = "newLogs subscription already active. Subscription ID: " + c.newLogsSubscriptionID
+		responseRPC.Error = &SubscriptionError{Code: SubscriptionAlreadyActiveErrorCode, Message: "newLogs subscription already active. Subscription ID: " + c.newLogsSubscriptionID}
 		return
 	}
 
@@ -29,18 +29,18 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 	if len(requestRPC.Params) > 1 {
 		jsonParams, err := json.Marshal(requestRPC.Params[1])
 		if err != nil {
-			responseRPC.Error = "failed to read log filters"
+			responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: err.Error()}
 			return
 		}
 
 		var filterParams SubscribeLogsFilterParams
 		if err := json.Unmarshal(jsonParams, &filterParams); err != nil {
-			responseRPC.Error = "failed to read log filters, incorrect json format"
+			responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: err.Error()}
 			return
 		}
 
 		if err := c.buildFilters(filterParams); err != nil {
-			responseRPC.Error = err.Error()
+			responseRPC.Error = &SubscriptionError{Code: IncorrectFilterErrorMessage, Message: err.Error()} 
 			return
 		}
 	}
