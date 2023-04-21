@@ -188,7 +188,7 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
 	// unmarshal request
 	var requestRPC SubscribeJsonRPC
 	if err := json.Unmarshal(request, &requestRPC); err != nil {
-		responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: err.Error()}
+		responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: "Input should be in JSON format"}
 		return
 	}
 
