@@ -11,7 +11,7 @@ import (
 
 var (
 	constantsInsertedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "neon-proxy",
+		Namespace: "neon_proxy",
 		Subsystem: "indexer",
 		Name:      "inserted_constants_total",
 		Help:      "The total number of inserted constants",

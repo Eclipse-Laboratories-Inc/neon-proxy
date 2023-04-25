@@ -94,7 +94,7 @@ type TxInfoKey struct {
 }
 
 func NewTxInfoKey(solNeonIx SolNeonIxReceiptInfo) TxInfoKey {
-	sign := solNeonIx.neonTxSig
+	sign := solNeonIx.metaInfo.neonTxSig
 	if sign[:2] == "0x" {
 		sign = sign[2:]
 	}
@@ -116,7 +116,7 @@ type TxInfoDataChunk struct {
 }
 
 func (t *TxInfoDataChunk) String() string {
-	return str_fmt_object(t, true)
+	return "" // todo implement
 }
 
 func (t *TxInfoDataChunk) IsValid() bool {
@@ -224,10 +224,10 @@ func (n *NeonIndexedTxInfo) CompleteEventList() {
 				}
 			}
 			isReverted = (revertedLevel != -1) || isFailed
-			isHidden = event.Hidden || isReverted
+			isHidden = event.hidden || isReverted
 		}
 		neonLogEvent := event.DeepCopy()
-		neonLogEvent.Hidden = isHidden
+		neonLogEvent.hidden = isHidden
 		neonLogEvent.reverted = isReverted
 		neonLogEvent.eventLevel = curLevel
 		neonLogEvent.eventOrder = curOrder
@@ -266,60 +266,6 @@ type NeonTxInfo struct {
 	r        string
 	s        string
 	err      error
-}
-
-type NeonTxResultInfo struct {
-	blockSlot int
-	blockHash string
-	txIdx     int
-
-	solSig        string
-	solIxIdx      int
-	solIxInnerIdx int
-
-	neonSig string
-	gasUsed string
-	status  string
-
-	logs []map[string]string
-
-	canceledStatus int
-	lostStatus     int
-}
-
-func (n *NeonTxResultInfo) IsValid() bool {
-	// todo implement
-	return true
-}
-
-func (n *NeonTxResultInfo) AddEvent(ev NeonLogTxEvent) {
-	// todo implement
-}
-
-func (n *NeonTxResultInfo) SetBlockInfo(block SolBlockInfo, neonSig string, txIdx int, logIdx int) int {
-	n.blockSlot = block.BlockSlot
-	n.blockHash = block.BlockHash
-	n.solSig = neonSig
-	n.txIdx = txIdx
-
-	hexBlockSlot := fmt.Sprintf("0x%x", n.blockSlot)
-	hexTxIdx := fmt.Sprintf("0x%x", n.txIdx)
-	txLogIdx := 0
-
-	for _, rec := range n.logs {
-		rec["transactionHash"] = n.solSig
-		rec["blockHash"] = n.blockHash
-		rec["blockNumber"] = hexBlockSlot
-		rec["transactionIndex"] = hexTxIdx
-		if _, ok := rec["neonIsHidden"]; !ok {
-			rec["logIndex"] = fmt.Sprintf("0x%x", logIdx)
-			rec["transactionLogIndex"] = fmt.Sprintf("0x%x", txLogIdx)
-			logIdx += 1
-			txLogIdx += 1
-		}
-	}
-
-	return logIdx
 }
 
 type NeonAccountInfo struct {
@@ -535,7 +481,7 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 			if err != nil {
 				log.Fatal(err)
 			}
-			neonIncome = solNeonIx.neonGasUsed * int(decimal_num)
+			neonIncome = solNeonIx.metaInfo.neonGasUsed * int(decimal_num)
 		}
 
 		solSpent := 0
@@ -548,15 +494,15 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 
 		stat.neonIncome += neonIncome
 		stat.neonStepCnt += solNeonIx.neonStepCnt
-		stat.bpfCycleCnt += solNeonIx.usedBpfCycleCnt
+		stat.bpfCycleCnt += solNeonIx.metaInfo.usedBpfCycleCnt
 
 		if isOpSolNeonIx {
 			stat.opSolSpent += solSpent
 			stat.opNeonIncome += neonIncome
 		}
 
-		if solNeonIx.neonTxReturn != nil {
-			if solNeonIx.neonTxReturn.Cancled {
+		if solNeonIx.metaInfo.neonTxReturn != nil {
+			if solNeonIx.metaInfo.neonTxReturn.Cancled {
 				stat.canceledNeonTxCnt++
 				if isOpSolNeonIx {
 					stat.opCanceledNeonTxCnt++
@@ -607,17 +553,6 @@ func (n *NeonIndexedBlockInfo) CompleteBlock(skipCancelTimeout int, holdertimeou
 			n.FailNeonHolder(holder)
 		}
 	}
-}
-
-type SolBlockInfo struct {
-	// todo implement
-	BlockSlot int
-	BlockHash string
-	finalized bool
-}
-
-func (s *SolBlockInfo) SetFinalized(value bool) {
-	s.finalized = value
 }
 
 type NeonTxStatData struct {
