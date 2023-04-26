@@ -644,7 +644,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 
 			// omit inside segment if the segment ends with revert
 			if exitCode == ExitRevert {
-				ind = endingInd + 1
+				ind = endingInd
 			}
 		case name == "EXIT":
 			evmCallDepth--
