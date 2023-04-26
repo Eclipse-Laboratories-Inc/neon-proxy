@@ -575,7 +575,10 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 
 	neonTxEventList := make([]NeonLogTxEvent, 0)
 	// for each solana transaction log message decode eth data
-	for ind, line := range logMessages {
+	for ind := 0; ind < len(logMessages); ind++ {
+		// get line
+		line := logMessages[ind]
+
 		// check if some non-evm program is called
 		if isNonEvmProgramInvoke(line) {
 			nonEvmCallDepth++
