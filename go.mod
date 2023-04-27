@@ -5,8 +5,8 @@ go 1.20
 require (
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/davecgh/go-spew v1.1.1
-	github.com/golang/mock v1.6.0
 	github.com/gagliardetto/solana-go v1.8.2
+	github.com/golang/mock v1.6.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/labstack/gommon v0.4.0

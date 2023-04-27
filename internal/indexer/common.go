@@ -3,14 +3,13 @@ package indexer
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/rpc"
-	solana2 "github.com/neonlabsorg/neon-proxy/pkg/solana"
 	"hash/fnv"
 	"strings"
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
+	solana2 "github.com/neonlabsorg/neon-proxy/pkg/solana"
+
 	"github.com/labstack/gommon/log"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -133,15 +132,15 @@ func SolTxMetaInfoFromResponse(slotInfo SolTxSigSlotInfo, resp *SolTxReceipt) *S
 	}
 }
 
-func NewSolTxMetaInfoFromEndRange(blockSlot int, commitment string) *SolTxMetaInfo {
+func NewSolTxMetaInfoFromEndRange(blockSlot uint64, commitment string) *SolTxMetaInfo {
 	ident := SolTxSigSlotInfo{
 		BlockSlot: blockSlot,
-		SolSign:   fmt.Sprintf("end-%v", commitment),
+		// SolSign:   fmt.Sprintf("end-%v", commitment),
+		// TODO ???
 	}
 	return &SolTxMetaInfo{
 		ident:     ident,
 		blockSlot: blockSlot,
-		solSign:   ident.SolSign,
 	}
 
 }
@@ -215,7 +214,6 @@ type SolTxCostInfo struct {
 
 type SolTxLogDecoder struct{} //todo move to decoder?
 type NeonLogTxReturn struct {
-
 	Cancled bool
 	GasUsed int
 	Status  int
