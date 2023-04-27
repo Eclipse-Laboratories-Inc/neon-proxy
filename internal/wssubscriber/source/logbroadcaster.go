@@ -544,6 +544,7 @@ func GetEnterExitCode(ind int, logMessages []string) (int, int) {
 			// decode eth event log
 			neonTxEvent, err := DecodeNeonTxExit(dataList)
 			if err != nil {
+				panic(err)
 				return 0, 0
 			}
 
@@ -575,7 +576,10 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 
 	neonTxEventList := make([]NeonLogTxEvent, 0)
 	// for each solana transaction log message decode eth data
-	for ind, line := range logMessages {
+	for ind := 0; ind < len(logMessages); ind++ {
+		// get line
+		line := logMessages[ind]
+
 		// check if some non-evm program is called
 		if isNonEvmProgramInvoke(line) {
 			nonEvmCallDepth++
@@ -636,12 +640,11 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 				return nil, false, neonTxHash, neonTxIx, err
 			}
 			// if the segment ends with revert, skip it
-			var exitCode, endingInd int
-			exitCode, endingInd = GetEnterExitCode(ind, logMessages);
+			exitCode, endingInd := GetEnterExitCode(ind, logMessages);
 
 			// omit inside segment if the segment ends with revert
 			if exitCode == ExitRevert {
-				ind = endingInd + 1
+				ind = endingInd
 			}
 		case name == "EXIT":
 			evmCallDepth--
