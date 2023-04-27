@@ -3,6 +3,7 @@ package indexer
 import (
 	"errors"
 	"fmt"
+
 	solana2 "github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/neonlabsorg/neon-proxy/internal/indexer/config"
@@ -84,6 +85,8 @@ func (c *FinalizedCollector) saveCheckpoint(info *SolTxSigSlotInfo, cnt int) {
 		c.logger.Debug().Msg(fmt.Sprintf("save checkpoint: %v: %v", *c.lastSignInfo, c.signCnt))
 		if err := c.solanaSignsDb.AddSign(*c.lastSignInfo); err == nil {
 			c.resetCheckpointCache()
+		} else {
+			c.logger.Error().Err(err).Msg("error saving checkpoint")
 		}
 	}
 }
