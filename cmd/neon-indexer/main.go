@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/neonlabsorg/neon-proxy/internal/indexer"
+	indconfig "github.com/neonlabsorg/neon-proxy/internal/indexer/config"
 	"github.com/neonlabsorg/neon-proxy/pkg/service"
 	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
 )
@@ -37,6 +38,12 @@ func runIndexer(s *service.Service) {
 			panic(err)
 		}
 	*/
-	app := indexer.NewIndexerApp(s.GetContext(), s.GetLogger(), indexerDB.GetRawDB(), s.GatherStatistics())
+
+	cfg, err := indconfig.CreateConfigFromEnv()
+	if err != nil {
+		panic(err)
+	}
+
+	app := indexer.NewIndexerApp(s.GetContext(), cfg, s.GetLogger(), indexerDB.GetRawDB(), s.GetSolanaRpcClient(), s.GatherStatistics())
 	app.Run()
 }

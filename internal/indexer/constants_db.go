@@ -11,7 +11,7 @@ import (
 
 var (
 	constantsInsertedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "neon-proxy",
+		Namespace: "neon_proxy",
 		Subsystem: "indexer",
 		Name:      "inserted_constants_total",
 		Help:      "The total number of inserted constants",
@@ -47,7 +47,7 @@ func (c ConstantsDB) GetItem(item string) error {
 		return fmt.Errorf("constants DB: unknown item %s", item)
 	}
 
-	err := c.db.QueryRow("SELECT value FROM ? WHERE key = ?", c.GetTableName(), item).Scan(item)
+	err := c.db.QueryRow("SELECT value FROM ? WHERE KEY = ?", c.GetTableName(), item).Scan(item)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("constants DB: unknown item %s", item)

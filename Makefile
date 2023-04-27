@@ -30,5 +30,13 @@ run-subscriber:
 run-wssubscriber:
 	sh run-neon-wssubscriber.sh
 
+run-tests: tools mocks
+	go test ./... -v
+tools:
+	go install github.com/golang/mock/mockgen@latest
+
+mocks:
+	mockgen -destination=pkg/solana/mocks/mock_solana_rpc_connection.go -source=pkg/solana/client.go -package=mocks solana SolanaRpcConnection
+	mockgen -destination=internal/indexer/mock_solana_signs_db.go -source=internal/indexer/solana_signs_db.go -package=indexer indexer SolanaSignsDBInterface
 # Empty rule for force run some targets always.
 FORCE:

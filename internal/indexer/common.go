@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
+	solana2 "github.com/neonlabsorg/neon-proxy/pkg/solana"
 	"hash/fnv"
 	"strings"
 
@@ -102,7 +103,7 @@ func (st SolTxSigSlotInfo) Hash() (int, error) {
 	return int(h.Sum32()), nil
 }
 
-type SolTxReceipt rpc.GetTransactionResult
+type SolTxReceipt solana2.TransactionResult
 
 type SolTxMetaInfo struct {
 	ident SolTxSigSlotInfo
@@ -114,7 +115,7 @@ type SolTxMetaInfo struct {
 	reqID string
 }
 
-func SolTxMetaInfoFromEndRange() *SolTxMetaInfo {
+func SolTxMetaInfoFromEndRange(slot uint64, commitmentType rpc.CommitmentType) *SolTxMetaInfo {
 	// TODO implement me properly
 	return &SolTxMetaInfo{}
 }
@@ -180,7 +181,7 @@ type SolIxMetaInfo struct {
 	neonGasUsed      int
 	neonTotalGasUsed int
 
-	neonTxReturn NeonLogTxReturn
+	neonTxReturn *NeonLogTxReturn
 	neonTxEvents []NeonLogTxEvent
 }
 
@@ -195,7 +196,9 @@ type SolTxCostInfo struct {
 }
 
 type SolTxLogDecoder struct{} //todo move to decoder?
-type NeonLogTxReturn struct{} // todo move to decoder?
+type NeonLogTxReturn struct {
+	Canceled bool
+} // todo move to decoder?
 
 type Ident struct {
 	solSign   string
@@ -214,8 +217,7 @@ type SolNeonIxReceiptInfo struct {
 	ixData    []byte
 
 	neonStepCnt int
-
-	solTxCost SolTxCostInfo
+	solTxCost   SolTxCostInfo
 
 	ident Ident
 

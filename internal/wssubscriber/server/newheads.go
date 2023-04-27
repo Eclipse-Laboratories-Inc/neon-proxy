@@ -15,7 +15,7 @@ func (c *Client) subscribeToNewHeads(requestRPC SubscribeJsonRPC, responseRPC *S
 
 	// check if subscription type for the client is active
 	if c.newHeadsIsActive {
-		responseRPC.Error = "newHeads subscription already active. Subscription ID: " + c.newHeadSubscriptionID
+		responseRPC.Error = &SubscriptionError{Code: SubscriptionAlreadyActiveErrorCode, Message: "newHeads subscription already active. Subscription ID: " + c.newHeadSubscriptionID}
 		return
 	}
 

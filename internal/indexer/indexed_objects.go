@@ -94,7 +94,7 @@ type TxInfoKey struct {
 }
 
 func NewTxInfoKey(solNeonIx SolNeonIxReceiptInfo) TxInfoKey {
-	sign := solNeonIx.neonTxSig
+	sign := solNeonIx.metaInfo.neonTxSig
 	if sign[:2] == "0x" {
 		sign = sign[2:]
 	}
@@ -115,8 +115,9 @@ type TxInfoDataChunk struct {
 	data   []byte
 }
 
+// TODO implement
 func (t *TxInfoDataChunk) String() string {
-	return str_fmt_object(t, true)
+	return ""
 }
 
 func (t *TxInfoDataChunk) IsValid() bool {
@@ -535,7 +536,7 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 			if err != nil {
 				log.Fatal(err)
 			}
-			neonIncome = solNeonIx.neonGasUsed * int(decimal_num)
+			neonIncome = solNeonIx.metaInfo.neonGasUsed * int(decimal_num)
 		}
 
 		solSpent := 0
@@ -548,15 +549,15 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 
 		stat.neonIncome += neonIncome
 		stat.neonStepCnt += solNeonIx.neonStepCnt
-		stat.bpfCycleCnt += solNeonIx.usedBpfCycleCnt
+		stat.bpfCycleCnt += solNeonIx.metaInfo.usedBpfCycleCnt
 
 		if isOpSolNeonIx {
 			stat.opSolSpent += solSpent
 			stat.opNeonIncome += neonIncome
 		}
 
-		if solNeonIx.neonTxReturn != nil {
-			if solNeonIx.neonTxReturn.Cancled {
+		if solNeonIx.metaInfo.neonTxReturn != nil {
+			if solNeonIx.metaInfo.neonTxReturn.Canceled {
 				stat.canceledNeonTxCnt++
 				if isOpSolNeonIx {
 					stat.opCanceledNeonTxCnt++
@@ -655,18 +656,6 @@ func NewNeonTxStatData(txType NeonIndexedTxType) *NeonTxStatData {
 	return &NeonTxStatData{
 		txType: typeName,
 	}
-}
-
-type SolTxMetaCollector struct{} // todo implemented NDEV 1312
-
-func (s *SolTxMetaCollector) IsFinalized() bool {
-	// // todo implemented
-	return false
-}
-
-func (s *SolTxMetaCollector) Commitment() string {
-	// // todo implemented
-	return ""
 }
 
 type IndexedBlockStat struct {
@@ -790,12 +779,12 @@ type NeonIndexedBlockData struct {
 
 type SolNeonTxDecoderState struct {
 	startTime          time.Time
-	initBlockSlot      int
-	startBlockSlot     int
-	stopBlockSlot      int
+	initBlockSlot      uint64
+	startBlockSlot     uint64
+	stopBlockSlot      uint64
 	solTxMetaCnt       int
 	solNeonIxCnt       int
-	solTxMetaCollector SolTxMetaCollector // todo(argishti) possible to use pointer
+	solTxMetaCollector CollectorInterface // todo(argishti) possible to use pointer
 
 	solTx     *SolTxReceiptInfo
 	solTxMeta *SolTxMetaInfo
@@ -804,7 +793,7 @@ type SolNeonTxDecoderState struct {
 	neonBlockDeque []NeonIndexedBlockData
 }
 
-func NewSolNeonTxDecoderState(solTxMetaCollector SolTxMetaCollector, startBlockSlot int, neonBlock *NeonIndexedBlockInfo) *SolNeonTxDecoderState {
+func NewSolNeonTxDecoderState(solTxMetaCollector CollectorInterface, startBlockSlot uint64, neonBlock *NeonIndexedBlockInfo) *SolNeonTxDecoderState {
 	state := SolNeonTxDecoderState{
 		startTime:          time.Now(),
 		initBlockSlot:      startBlockSlot,
@@ -827,7 +816,7 @@ func (s *SolNeonTxDecoderState) SetNeonBlock(neonBlock *NeonIndexedBlockInfo) {
 	s.neonBlockDeque = append(s.neonBlockDeque, NeonIndexedBlockData{neonBlock, isFinalized})
 }
 
-func (s *SolNeonTxDecoderState) ShifttoCollector(collector SolTxMetaCollector) {
+func (s *SolNeonTxDecoderState) ShifttoCollector(collector CollectorInterface) {
 	s.startBlockSlot = s.stopBlockSlot + 1
 	s.stopBlockSlot = s.startBlockSlot
 	s.solTxMetaCollector = collector
@@ -893,5 +882,5 @@ func (s *SolNeonTxDecoderState) SolNeonIx() *SolNeonIxReceiptInfo {
 }
 
 func (s *SolNeonTxDecoderState) EndRange() *SolTxMetaInfo {
-	return NewSolTxMetaInfoFromEndRange(s.stopBlockSlot, s.solTxMetaCollector.Commitment())
+	return SolTxMetaInfoFromEndRange(s.stopBlockSlot, s.solTxMetaCollector.GetCommitment())
 }
