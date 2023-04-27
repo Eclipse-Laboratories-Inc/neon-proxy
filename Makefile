@@ -28,7 +28,7 @@ run-subscriber:
 	./bin/neon-subscriber
 
 run-wssubscriber:
-	./bin/neon-wssubscriber
+	sh run-neon-wssubscriber.sh
 
 run-tests: tools mocks
 	go test ./... -v
