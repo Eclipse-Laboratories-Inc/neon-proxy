@@ -12,11 +12,29 @@ type Client struct {
 	conn SolanaRpcConnection
 }
 
-func NewClient(log logger.Logger, url string) *Client {
-	rpc.New(url)
+type SolanaRpcConnection interface {
+	Close() error
+	GetHealth(ctx context.Context) (out string, err error)
+	GetSignaturesForAddressWithOpts(ctx context.Context, account solana.PublicKey, opts *rpc.GetSignaturesForAddressOpts) (out []*rpc.TransactionSignature, err error)
+	GetBlockWithOpts(ctx context.Context, slot uint64, opts *rpc.GetBlockOpts) (out *rpc.GetBlockResult, err error)
+	GetBlockHeight(ctx context.Context, commitment rpc.CommitmentType) (out uint64, err error)
+	GetRecentBlockhash(ctx context.Context, commitment rpc.CommitmentType) (out *rpc.GetRecentBlockhashResult, err error)
+	GetAccountInfoWithOpts(ctx context.Context, account solana.PublicKey, opts *rpc.GetAccountInfoOpts) (*rpc.GetAccountInfoResult, error)
+	GetProgramAccountsWithOpts(ctx context.Context, publicKey solana.PublicKey, opts *rpc.GetProgramAccountsOpts) (out rpc.GetProgramAccountsResult, err error)
+	GetBalance(ctx context.Context, publicKey solana.PublicKey, commitment rpc.CommitmentType) (out *rpc.GetBalanceResult, err error)
+	GetSignatureStatuses(ctx context.Context, searchTransactionHistory bool, transactionSignatures ...solana.Signature) (out *rpc.GetSignatureStatusesResult, err error)
+	GetBlockCommitment(ctx context.Context, block uint64) (out *rpc.GetBlockCommitmentResult, err error)
+	GetMinimumBalanceForRentExemption(ctx context.Context, dataSize uint64, commitment rpc.CommitmentType) (lamport uint64, err error)
+	SendTransaction(ctx context.Context, transaction *solana.Transaction) (signature solana.Signature, err error)
+	GetTransaction(ctx context.Context, txSig solana.Signature, opts *rpc.GetTransactionOpts) (out *rpc.GetTransactionResult, err error)
+	GetClusterNodes(ctx context.Context) (out []*rpc.GetClusterNodesResult, err error)
+	GetSlot(ctx context.Context, commitment rpc.CommitmentType) (out uint64, err error)
+}
+
+func NewClient(log logger.Logger, rpcConn SolanaRpcConnection) *Client {
 	return &Client{
 		log:  log,
-		conn: rpc.New(url),
+		conn: rpcConn,
 	}
 }
 
@@ -32,6 +50,8 @@ func (c *Client) IsHealth(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
+// GetSignListForAddress gets signatures from newest to oldest
+// https://docs.solana.com/api/http#getsignaturesforaddress
 func (c *Client) GetSignListForAddress(
 	ctx context.Context, addr solana.PublicKey,
 	limit *int, before, until *solana.Signature, commitmentType rpc.CommitmentType,
@@ -171,7 +191,7 @@ func (c *Client) GetSolBalanceList(ctx context.Context, accounts []solana.Public
 	return result, nil
 }
 
-// CheckConfirmOfTxSignsList checks if all transactions with given signs confirmed
+// CheckConfirmOfTxSignsList checks if all transactions with given signatures are confirmed
 func (c *Client) CheckConfirmOfTxSignsList(ctx context.Context, txsSigns []solana.Signature, validBlockHeight uint64) (bool, error) {
 	const limit = 100
 	if len(txsSigns) == 0 {
@@ -192,6 +212,7 @@ func (c *Client) CheckConfirmOfTxSignsList(ctx context.Context, txsSigns []solan
 
 	for len(txsSigns) > 0 {
 		if len(txsSigns) > limit {
+			// divide signatures to 'batch' and 'rest'
 			partTxsSigns, txsSigns = txsSigns[:limit], txsSigns[limit:]
 		} else {
 			partTxsSigns = txsSigns
@@ -267,8 +288,8 @@ func (c *Client) SendTxList(ctx context.Context, txs []*solana.Transaction) ([]s
 }
 
 func (c *Client) GetTxReceiptList(ctx context.Context, signatures []solana.Signature,
-	encodingType solana.EncodingType, commitmentType rpc.CommitmentType) ([]*rpc.GetTransactionResult, error) {
-	result := make([]*rpc.GetTransactionResult, 0)
+	encodingType solana.EncodingType, commitmentType rpc.CommitmentType) ([]*TransactionResult, error) {
+	result := make([]*TransactionResult, 0)
 	for _, sign := range signatures {
 		resp, err := c.conn.GetTransaction(ctx, sign, &rpc.GetTransactionOpts{
 			Encoding:   encodingType,
@@ -277,7 +298,18 @@ func (c *Client) GetTxReceiptList(ctx context.Context, signatures []solana.Signa
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, resp)
+
+		tx, _ := resp.Transaction.GetTransaction()
+		result = append(result, &TransactionResult{
+			Slot:      resp.Slot,
+			BlockTime: resp.BlockTime,
+			Transaction: &TransactionResultEnvelope{
+				AsDecodedBinary:     resp.Transaction.GetData(),
+				AsParsedTransaction: tx,
+			},
+			Meta:    resp.Meta,
+			Version: resp.Version,
+		})
 	}
 	return result, nil
 }

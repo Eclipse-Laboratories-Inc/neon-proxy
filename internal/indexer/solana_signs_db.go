@@ -7,6 +7,16 @@ import (
 
 var ErrRecordNotFound = errors.New("no record found")
 
+type SolanaSignsDBInterface interface {
+	GetColums() []string
+	GetTableName() string
+	InsertBatch([]map[string]string) (int64, error)
+	GetDB() *sql.DB
+	AddSign(SolTxSigSlotInfo) error
+	GetMaxSign() (*SolTxSigSlotInfo, error)
+	GetNextSign(uint64) (*SolTxSigSlotInfo, error)
+}
+
 type SolanaSignsDB struct {
 	db *sql.DB
 }

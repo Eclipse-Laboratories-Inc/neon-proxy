@@ -6,14 +6,15 @@ require (
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gagliardetto/solana-go v1.8.1
+	github.com/golang/mock v1.6.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/lib/pq v1.10.7
-	github.com/mr-tron/base58 v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.8.1
+	github.com/test-go/testify v1.1.4
 	github.com/urfave/cli/v2 v2.20.3
 	golang.org/x/exp v0.0.0-20230307190834-24139beb5833
 	google.golang.org/grpc v1.53.0
@@ -48,6 +49,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mostynb/zstdpool-freelist v0.0.0-20201229113212-927304c0c3b1 // indirect
+	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
