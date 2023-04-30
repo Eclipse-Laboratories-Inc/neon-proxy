@@ -1,9 +1,7 @@
 package source
 
 import (
-	"os"
 	"bytes"
-	"sort"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -11,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
-	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/config"
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"math/big"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -51,7 +51,6 @@ var (
 	EvmInvocationFailEnd    = "Program " + os.Getenv(config.EvmAddress) + " fail"
 	// cache for transaction iterations until all the iterations are found and eth transaction processed
 	splitTransactions map[string]IterationCache
-
 )
 
 // RegisterLogsBroadcasterSources passes data and error channels where new incoming data (transaction logs) will be pushed and redirected to broadcaster
@@ -468,7 +467,7 @@ func GetEvents(logMessages []string) ([]Event, error) {
 
 					// if the transaction is one of the iteration process separately
 					if isIteration {
-						eventLogs, err = processSplitTransaction("0x" + hex.EncodeToString(txHash), usedGas, logMessages[evmProgramStartIndex:k])
+						eventLogs, err = processSplitTransaction("0x"+hex.EncodeToString(txHash), usedGas, logMessages[evmProgramStartIndex:k])
 						if err != nil {
 							return nil, err
 						}
@@ -508,7 +507,7 @@ func GetEnterExitCode(ind int, logMessages []string) (int, int) {
 
 	var callDepth int
 	// we encounter non evm calls inside evm call segment so we remember the current depth of such calls
-	for ind = ind; ind <= len(logMessages) - 1; ind++ {
+	for ind = ind; ind <= len(logMessages)-1; ind++ {
 		// check if some non-evm program is called
 		if isNonEvmProgramInvoke(logMessages[ind]) {
 			nonEvmCallDepth++
@@ -572,7 +571,6 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 	var nonEvmCallDepth int
 	// count the number of enter calls
 	var evmCallDepth int
-
 
 	neonTxEventList := make([]NeonLogTxEvent, 0)
 	// for each solana transaction log message decode eth data
@@ -640,7 +638,7 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 				return nil, false, neonTxHash, neonTxIx, err
 			}
 			// if the segment ends with revert, skip it
-			exitCode, endingInd := GetEnterExitCode(ind, logMessages);
+			exitCode, endingInd := GetEnterExitCode(ind, logMessages)
 
 			// omit inside segment if the segment ends with revert
 			if exitCode == ExitRevert {
@@ -667,7 +665,6 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 		}
 	}
 
-
 	// check if transaction is one of the iterations of eth transaction
 	/*
 		case 1: the iteration is the last iteration with RETURN instruction and the total gas.
@@ -680,9 +677,9 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 			set the gas usage target of the eth transaction.
 			When the sum of all iteration gas usage reaches this value we know we have collected all the iterations.
 		*/
-		v := splitTransactions["0x" + hex.EncodeToString(neonTxHash)]
+		v := splitTransactions["0x"+hex.EncodeToString(neonTxHash)]
 		v.targetTotalGas = neonTxIx.totalGasUsed
-		splitTransactions["0x" + hex.EncodeToString(neonTxHash)] = v
+		splitTransactions["0x"+hex.EncodeToString(neonTxHash)] = v
 
 		return nil, true, neonTxHash, neonTxIx, nil
 	}
@@ -692,8 +689,8 @@ func parseLogs(logMessages []string) ([]NeonLogTxEvent, bool, []byte, *NeonLogTx
 		In this case we have no RETURN instruction which basically means that it's already iteration type,
 		but also we check that we have information about gas usage to be able to order
 		the iterations according to gas usage in the and before processing them together.
-  */
-	if (neonTxReturn == nil && neonTxIx != nil) {
+	*/
+	if neonTxReturn == nil && neonTxIx != nil {
 		return nil, true, neonTxHash, neonTxIx, nil
 	}
 

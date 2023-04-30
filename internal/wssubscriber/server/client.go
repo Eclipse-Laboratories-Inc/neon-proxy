@@ -33,13 +33,13 @@ const (
 	subscriptionNewPendingTransactions = "newPendingTransactions"
 
 	//error codes
-	UnmarshalingErrorCode = -1
-	MethodNotFoundErrorCode = -32601
-	RequestIDErrorCode = -2
+	UnmarshalingErrorCode                = -1
+	MethodNotFoundErrorCode              = -32601
+	RequestIDErrorCode                   = -2
 	IncorrectNumberOfParametersErrorCode = -3
-	IncorrectParameterTypeErrorCode = -4
-	SubscriptionAlreadyActiveErrorCode = -5
-	IncorrectFilterErrorMessage = -6
+	IncorrectParameterTypeErrorCode      = -4
+	SubscriptionAlreadyActiveErrorCode   = -5
+	IncorrectFilterErrorMessage          = -6
 )
 
 // defining each connection parameters
@@ -107,18 +107,17 @@ type SubscribeLogsFilterParams struct {
 	Topics    []interface{} `json:"topics"`
 }
 
-
 // defines error returned to user
 type SubscriptionError struct {
-	Code int `json:"code"`
+	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
 // subscription response from websocket
 type SubscribeJsonResponseRCP struct {
-	Version string `json:"jsonrpc"`
-	ID      uint64 `json:"id"`
-	Result  string `json:"result,omitempty"`
+	Version string             `json:"jsonrpc"`
+	ID      uint64             `json:"id"`
+	Result  string             `json:"result,omitempty"`
 	Error   *SubscriptionError `json:"error,omitempty"`
 }
 
