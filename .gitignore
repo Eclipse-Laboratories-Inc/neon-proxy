@@ -23,4 +23,4 @@ bin
 tmp
 logs
 
-.env
+internal/indexer/config/test/.test.env
