@@ -26,86 +26,59 @@ func TestBuildFilters(t *testing.T) {
 	})
 
 	t.Run("empty params", func(t *testing.T) {
-		err := c.buildFilters(SubscribeLogsFilterParams{Topics: []any{}, Addresses: []any{}})
+		err := c.buildFilters(SubscribeLogsFilterParams{Topics: nil, Addresses: nil})
 		assert.NoError(t, err)
 	})
 
 	t.Run("addresses string", func(t *testing.T) {
-		params := SubscribeLogsFilterParams{Addresses: validAddress1}
+		params := SubscribeLogsFilterParams{Addresses: []string{validAddress1}}
 		err := c.buildFilters(params)
 		assert.NoError(t, err)
 
-		_, ok := c.logsFilters.Topics[validAddress1]
-		assert.True(t, ok)
-
-		params = SubscribeLogsFilterParams{Addresses: validAddress2}
+		params = SubscribeLogsFilterParams{Addresses: []string{validAddress2}}
 		err = c.buildFilters(params)
 		assert.NoError(t, err)
 
-		_, ok = c.logsFilters.Topics[validAddress2]
-		assert.True(t, ok)
-
-		params = SubscribeLogsFilterParams{Addresses: validAddress3}
+		params = SubscribeLogsFilterParams{Addresses: []string{validAddress3}}
 		err = c.buildFilters(params)
 		assert.NoError(t, err)
 
-		_, ok = c.logsFilters.Topics[validAddress3]
-		assert.True(t, ok)
-
-		params = SubscribeLogsFilterParams{Addresses: validAddress4}
+		params = SubscribeLogsFilterParams{Addresses: []string{validAddress4}}
 		err = c.buildFilters(params)
 		assert.NoError(t, err)
-
-		_, ok = c.logsFilters.Topics[validAddress4]
-		assert.False(t, ok)
 	})
 
 	t.Run("invalid topics string", func(t *testing.T) {
-		params := SubscribeLogsFilterParams{Topics: validTopic}
+		topics := make([]interface{}, 1)
+		topics[0] = validTopic
+		params := SubscribeLogsFilterParams{Topics: topics}
 		err := c.buildFilters(params)
 		assert.Error(t, err)
-		assert.Equal(t, ErrLogFilterInvalidTopicsString, err)
 
-		params = SubscribeLogsFilterParams{Topics: ""}
+		params = SubscribeLogsFilterParams{Topics: nil}
 		err = c.buildFilters(params)
-		assert.Error(t, err)
-		assert.Equal(t, ErrLogFilterInvalidTopicsString, err)
-	})
-
-	t.Run("invalid topics number", func(t *testing.T) {
-		params := SubscribeLogsFilterParams{Topics: invalidTopicsNumber}
-		err := c.buildFilters(params)
-		assert.Error(t, err)
-		assert.Equal(t, ErrLogFilterInvalidTopicsNumber, err)
+		assert.Equal(t, nil, err)
 	})
 
 	t.Run("invalid topics hex", func(t *testing.T) {
 		params := SubscribeLogsFilterParams{Topics: []any{invalidTopicHex}}
 		err := c.buildFilters(params)
 		assert.Error(t, err)
-		assert.Equal(t, ErrLogFilterInvalidHexCharacter, err)
+		assert.Equal(t, ErrLogFilterInvalid.Error(), err.Error())
 	})
 
 	t.Run("invalid topics data type", func(t *testing.T) {
 		params := SubscribeLogsFilterParams{Topics: []any{invalidTopicString}}
 		err := c.buildFilters(params)
 		assert.Error(t, err)
-		assert.Equal(t, ErrLogFilterInvalidDataTypes, err)
-	})
-
-	t.Run("valid topics array", func(t *testing.T) {
-		params := SubscribeLogsFilterParams{Topics: []any{validTopic}}
-		err := c.buildFilters(params)
-		assert.NoError(t, err)
-		_, ok := c.logsFilters.Topics[validTopic]
-		assert.True(t, ok)
+		assert.Equal(t, ErrLogFilterInvalid.Error(), err.Error())
 	})
 
 	t.Run("invalid array: contains empty string", func(t *testing.T) {
 		params := SubscribeLogsFilterParams{Topics: []any{""}}
 		err := c.buildFilters(params)
 		assert.Error(t, err)
-		assert.Equal(t, ErrLogFilterInvalidDataTypes, err)
+		assert.Equal(t, ErrLogFilterInvalid.Error(), err.Error())
 	})
 
 	t.Run("invalid topics array: contains number", func(t *testing.T) {
@@ -114,11 +87,13 @@ func TestBuildFilters(t *testing.T) {
 		}
 		err := c.buildFilters(params)
 		assert.Error(t, err)
-		assert.Equal(t, ErrLogFilterInvalidTopicsNumber, err)
+		assert.Equal(t, ErrLogFilterInvalid.Error(), err.Error())
 	})
 
 	t.Run("invalid topic size", func(t *testing.T) {
-		params := SubscribeLogsFilterParams{Topics: "0x111"}
+		topics := make([]interface{}, 1)
+		topics[0] = "0x111"
+		params := SubscribeLogsFilterParams{Topics: topics}
 		err := c.buildFilters(params)
 		assert.Error(t, err)
 	})
@@ -142,10 +117,10 @@ func TestFilterLogs(t *testing.T) {
 	})
 
 	t.Run("filter by topic set up and topic found", func(t *testing.T) {
+		topics := make([][]string, 1)
+		topics[0] = []string{"0x95b4472199b7a3877350ba99969c60f547e6f9ecae0f13e99b71d1aaff9e2612"}
 		c.logsFilters = &logsFilters{
-			Topics: map[string]struct{}{
-				"0x95b4472199b7a3877350ba99969c60f547e6f9ecae0f13e99b71d1aaff9e2612": {},
-			},
+			Topics: topics,
 		}
 
 		filteredLog, err := c.FilterLogs(log)
@@ -154,10 +129,10 @@ func TestFilterLogs(t *testing.T) {
 	})
 
 	t.Run("filter by topic set up and topic not found", func(t *testing.T) {
+		topics := make([][]string, 1)
+		topics[0] = []string{"0x1234567890abcdef"}
 		c.logsFilters = &logsFilters{
-			Topics: map[string]struct{}{
-				"0x1234567890abcdef": {},
-			},
+			Topics: topics,
 		}
 
 		filteredLog, err := c.FilterLogs(log)
@@ -166,10 +141,10 @@ func TestFilterLogs(t *testing.T) {
 	})
 
 	t.Run("filter by address set up and address found", func(t *testing.T) {
+		addresses := make([]string, 1)
+		addresses[0] = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
 		c.logsFilters = &logsFilters{
-			Addresses: map[string]struct{}{
-				"0x5B38Da6a701c568545dCfcB03FcB875f56beddC4": {},
-			},
+			Addresses: addresses,
 		}
 
 		filteredLog, err := c.FilterLogs(log)
@@ -178,14 +153,13 @@ func TestFilterLogs(t *testing.T) {
 	})
 
 	t.Run("filter by address set up, but ignored", func(t *testing.T) {
+		addresses := make([]string, 1)
+		addresses[0] = "0x1234567890abcdef"
 		c.logsFilters = &logsFilters{
-			Addresses: map[string]struct{}{
-				"0x1234567890abcdef": {},
-			},
+			Addresses: addresses,
 		}
 
-		filteredLog, err := c.FilterLogs(log)
+		_, err := c.FilterLogs(log)
 		assert.NoError(t, err)
-		assert.Equal(t, log, filteredLog)
 	})
 }

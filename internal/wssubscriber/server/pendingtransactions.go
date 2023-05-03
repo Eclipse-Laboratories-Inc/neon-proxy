@@ -15,7 +15,7 @@ func (c *Client) subscribeToNewPendingTransactions(requestRPC SubscribeJsonRPC, 
 
 	// check if subscription type for the client is active
 	if c.pendingTransactionsIsActive {
-		responseRPC.Error = "pendingTransactions subscription already active. Subscription ID: " + c.pendingTransactionsSubscriptionID
+		responseRPC.Error = &SubscriptionError{Code: SubscriptionAlreadyActiveErrorCode, Message: "pendingTransactions subscription already active. Subscription ID: " + c.pendingTransactionsSubscriptionID}
 		return
 	}
 

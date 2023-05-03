@@ -10,10 +10,7 @@ import (
 )
 
 var (
-	ErrLogFilterInvalidDataTypes    = errors.New("invalid log filter: data types must start with 0x")
-	ErrLogFilterInvalidTopicsString = errors.New("invalid log filter: invalid field topics: string")
-	ErrLogFilterInvalidTopicsNumber = errors.New("invalid log filter: invalid field topics: number")
-	ErrLogFilterInvalidHexCharacter = errors.New("invalid log filter: invalid hex string, invalid character")
+	ErrLogFilterInvalid = errors.New("Invalid topic")
 )
 
 // to be implemented
@@ -24,7 +21,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 
 	// check if subscription type for the client is active
 	if c.newLogsIsActive {
-		responseRPC.Error = "newLogs subscription already active. Subscription ID: " + c.newLogsSubscriptionID
+		responseRPC.Error = &SubscriptionError{Code: SubscriptionAlreadyActiveErrorCode, Message: "newLogs subscription already active. Subscription ID: " + c.newLogsSubscriptionID}
 		return
 	}
 
@@ -32,18 +29,18 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 	if len(requestRPC.Params) > 1 {
 		jsonParams, err := json.Marshal(requestRPC.Params[1])
 		if err != nil {
-			responseRPC.Error = "failed to read log filters"
+			responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: err.Error()}
 			return
 		}
 
 		var filterParams SubscribeLogsFilterParams
 		if err := json.Unmarshal(jsonParams, &filterParams); err != nil {
-			responseRPC.Error = "failed to read log filters, incorrect json format"
+			responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: err.Error()}
 			return
 		}
 
 		if err := c.buildFilters(filterParams); err != nil {
-			responseRPC.Error = err.Error()
+			responseRPC.Error = &SubscriptionError{Code: IncorrectFilterErrorMessage, Message: err.Error()}
 			return
 		}
 	}
@@ -94,17 +91,21 @@ func (c *Client) buildFilters(params SubscribeLogsFilterParams) error {
 				t = append(t, topics.(string))
 				c.logsFilters.Topics = append(c.logsFilters.Topics, t)
 			} else {
-				return errors.New("Invalid topic ")
+				return errors.New("Invalid topic")
 			}
 		case []interface{}:
-			parsedTopics := make([]string, 0)
 			for _, ta := range topics.([]interface{}) {
 				switch ta.(type) {
 				case string:
-					parsedTopics = append(parsedTopics, ta.(string))
+					if utils.IsTopicValid(ta.(string)) {
+						t := make([]string, 0)
+						t = append(t, ta.(string))
+						c.logsFilters.Topics = append(c.logsFilters.Topics, t)
+					} else {
+						return errors.New("Invalid topic")
+					}
 				}
 			}
-			c.logsFilters.Topics = append(c.logsFilters.Topics, parsedTopics)
 		}
 	}
 

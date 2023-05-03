@@ -77,6 +77,15 @@ func FromString(name string) Role {
 	return Unknown
 }
 
+const (
+	defaultCurRoleServiceCount         = "1"
+	defaultCurRoleIndex                = "0"
+	defaultCommunicationServerAddress  = "127.0.0.1"
+	defaultCommunicationServerPort     = "10200"
+	defaultCommunicationEndpointServer = "127.0.0.1"
+	defaultCommunicationEndpointPort   = "1055"
+)
+
 // COMMUNICATION PROTOCOL CONFIG
 type ProtocolConfiguration struct {
 	Role       Role
@@ -86,7 +95,7 @@ type ProtocolConfiguration struct {
 	CreatedAt  time.Time
 }
 
-// LOAD COMMUNICATION PROTOCOL CONFIGURATION
+// LOAD COMMUNICATION  PROTOCOL CONFIGURATION
 func (c *ProtocolConfiguration) LoadProtocolConfig(name string, index int) (err error) {
 	name = strings.ToUpper(name)
 	c.CreatedAt = time.Now().UTC()
@@ -108,10 +117,14 @@ type CommunicationProtocolConfiguration struct {
 
 // LOAD PROTOCOL CONFIGURATION
 func (c *CommunicationProtocolConfiguration) LoadCommunicationProtocolConfig(name string) (err error) {
+	prType := FromString(name)
 	for _, role := range allRoles {
 		prName := role.String()
 		sName := strings.ToUpper(prName)
-		prCount := os.Getenv(fmt.Sprintf("NS_COMMUNICATION_%s_COUNT", sName))
+		prCount, found := os.LookupEnv(fmt.Sprintf("NS_COMMUNICATION_%s_COUNT", sName))
+		if !found && role == prType {
+			prCount = defaultCurRoleServiceCount
+		}
 		count, err := strconv.Atoi(prCount)
 		if err != nil {
 			continue // continue read other roles
@@ -123,13 +136,14 @@ func (c *CommunicationProtocolConfiguration) LoadCommunicationProtocolConfig(nam
 		}
 	}
 
-	prType := FromString(name)
 	name = strings.ToUpper(name)
-	envName := fmt.Sprintf("NS_COMMUNICATION_CUR_%s_INDEX", name)
-	curIndex := os.Getenv(envName)
-	index, err := strconv.Atoi(curIndex)
+	prCurIndex, found := os.LookupEnv(fmt.Sprintf("NS_COMMUNICATION_CUR_%s_INDEX", name))
+	if !found {
+		prCurIndex = defaultCurRoleIndex
+	}
+	index, err := strconv.Atoi(prCurIndex)
 	if err != nil {
-		return fmt.Errorf("invalid or unset env variable %s : %w", envName, err)
+		return errors.New("config parse error: current index is not a number")
 	}
 	if index >= len(c.RelativeConfigs[prType]) {
 		return errors.New("config parse error: current index is not less than roles count")
@@ -139,11 +153,11 @@ func (c *CommunicationProtocolConfiguration) LoadCommunicationProtocolConfig(nam
 
 	sAddress := os.Getenv("NS_COMMUNICATION_SERVER_LISTEN_ADDRESS")
 	if sAddress == "" {
-		return errors.New("config parse error: communication server Address is not defined")
+		sAddress = defaultCommunicationServerAddress
 	}
 	sPort := os.Getenv("NS_COMMUNICATION_SERVER_LISTEN_PORT")
 	if sPort == "" {
-		return errors.New("config parse error: communication server port is not defined")
+		sPort = defaultCommunicationServerPort
 	}
 	port, err := strconv.Atoi(sPort)
 	if err != nil {
@@ -153,11 +167,11 @@ func (c *CommunicationProtocolConfiguration) LoadCommunicationProtocolConfig(nam
 
 	cesAddress := os.Getenv("NS_COMMUNICATION_ENDPOINT_SERVER_LISTEN_ADDRESS")
 	if cesAddress == "" {
-		return errors.New("config parse error: communication endpoint server Address is not defined")
+		cesAddress = defaultCommunicationEndpointServer
 	}
 	cesPort := os.Getenv("NS_COMMUNICATION_ENDPOINT_SERVER_LISTEN_PORT")
 	if cesPort == "" {
-		return errors.New("config parse error: communication endpoint server port is not defined")
+		cesPort = defaultCommunicationEndpointPort
 	}
 	eport, err := strconv.Atoi(cesPort)
 	if err != nil {
