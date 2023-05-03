@@ -719,7 +719,7 @@ type SolNeonTxDecoderState struct {
 	stopBlockSlot      uint64
 	solTxMetaCnt       int
 	solNeonIxCnt       int
-	solTxMetaCollector CollectorInterface // todo(argishti) possible to use pointer
+	solTxMetaCollector CollectorInterface
 
 	solTx     *SolTxReceiptInfo
 	solTxMeta *SolTxMetaInfo
