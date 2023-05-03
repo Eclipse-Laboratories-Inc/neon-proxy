@@ -54,7 +54,7 @@ func (c *SolanaTxMetaCollector) IsFinalized() bool {
 // requestTxMetaList gets solana signatures and requests for each signature tx receipt from solana
 // and adds info to txMetaDict
 func (c *SolanaTxMetaCollector) requestTxMetaList(sigSlotList ...SolTxSigSlotInfo) error {
-	var sigList []solana2.Signature
+	sigList := make([]solana2.Signature, 0, len(sigSlotList))
 	for _, sigSlot := range sigSlotList {
 		sigList = append(sigList, sigSlot.SolSign)
 	}
