@@ -3,6 +3,7 @@ services:
   neon-wssubscriber:
     container_name: neon-wssubscriber
     image: neonlabsorg/neon-wssubscriber:${TAG}
+    restart: unless-stopped
     environment:
       SOLANA_RPC_ENDPOINT: ${SOLANA_RPC_ENDPOINT}
       EVM_ADDRESS: ${EVM_ADDRESS}
