@@ -60,7 +60,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 }
 
 func (c *Client) buildFilters(params SubscribeLogsFilterParams) error {
-	c.logsFilters = &logsFilters{}
+	c.logsFilters = logsFilters{}
 	c.logsFilters.Addresses = make([]string, 0)
 	c.logsFilters.Topics = make([][]string, 0)
 
