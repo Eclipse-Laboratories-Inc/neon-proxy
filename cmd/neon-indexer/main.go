@@ -39,11 +39,14 @@ func runIndexer(s *service.Service) {
 		}
 	*/
 
-	cfg, err := indconfig.CreateConfigFromEnv()
+	cfg, err := indconfig.CreateConfigFromEnv("", "")
 	if err != nil {
 		panic(err)
 	}
 
-	app := indexer.NewIndexerApp(s.GetContext(), cfg, s.GetLogger(), indexerDB.GetRawDB(), s.GetSolanaRpcClient(), s.GatherStatistics())
+	app, err := indexer.NewIndexerApp(s.GetContext(), cfg, s.GetLogger(), indexerDB.GetRawDB(), s.GetSolanaRpcClient(), 0, s.GatherStatistics())
+	if err != nil {
+		panic(err)
+	}
 	app.Run()
 }
