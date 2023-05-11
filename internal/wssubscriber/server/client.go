@@ -33,13 +33,13 @@ const (
 	subscriptionNewPendingTransactions = "newPendingTransactions"
 
 	//error codes
-	UnmarshalingErrorCode                = -1
-	MethodNotFoundErrorCode              = -32601
-	RequestIDErrorCode                   = -2
+	UnmarshalingErrorCode = -1
+	MethodNotFoundErrorCode = -32601
+	RequestIDErrorCode = -2
 	IncorrectNumberOfParametersErrorCode = -3
-	IncorrectParameterTypeErrorCode      = -4
-	SubscriptionAlreadyActiveErrorCode   = -5
-	IncorrectFilterErrorMessage          = -6
+	IncorrectParameterTypeErrorCode = -4
+	SubscriptionAlreadyActiveErrorCode = -5
+	IncorrectFilterErrorMessage = -6
 )
 
 // defining each connection parameters
@@ -107,17 +107,18 @@ type SubscribeLogsFilterParams struct {
 	Topics    []interface{} `json:"topics"`
 }
 
+
 // defines error returned to user
 type SubscriptionError struct {
-	Code    int    `json:"code"`
+	Code int `json:"code"`
 	Message string `json:"message"`
 }
 
 // subscription response from websocket
 type SubscribeJsonResponseRCP struct {
-	Version string             `json:"jsonrpc"`
-	ID      uint64             `json:"id"`
-	Result  string             `json:"result,omitempty"`
+	Version string `json:"jsonrpc"`
+	ID      uint64 `json:"id"`
+	Result  string `json:"result,omitempty"`
 	Error   *SubscriptionError `json:"error,omitempty"`
 }
 
@@ -187,7 +188,7 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
 	// unmarshal request
 	var requestRPC SubscribeJsonRPC
 	if err := json.Unmarshal(request, &requestRPC); err != nil {
-		responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: "Input should be in JSON format " + err.Error()}
+		responseRPC.Error = &SubscriptionError{Code: UnmarshalingErrorCode, Message: "Input should be in JSON format"}
 		return
 	}
 
@@ -272,12 +273,6 @@ func (c *Client) unsubscribe(requestRPC SubscribeJsonRPC, responseRPC *Subscribe
 	// get subscription id to cancel subscription
 	subscriptionID := requestRPC.Params[0].(string)
 
-	// check for empty subscription id
-	if subscriptionID == "" {
-		responseRPC.Error = &SubscriptionError{Code: MethodNotFoundErrorCode, Message: "Subscription not found"}
-		return
-	}
-
 	// protect client vars
 	c.newHeadsLocker.Lock()
 	defer c.newHeadsLocker.Unlock()
@@ -309,20 +304,6 @@ func (c *Client) unsubscribe(requestRPC SubscribeJsonRPC, responseRPC *Subscribe
 		responseRPC.ID = requestRPC.ID
 		c.pendingTransactionsSubscriptionID = ""
 		c.pendingTransactionsIsActive = false
-		return
-	}
-
-	// protect logs
-	c.newLogsLocker.Lock()
-	defer c.newLogsLocker.Unlock()
-
-	// unsubscribe logs
-	if c.newLogsSubscriptionID == subscriptionID {
-		c.newLogsBroadcaster.CancelSubscription(c.newLogsSource)
-		responseRPC.Result = "true"
-		responseRPC.ID = requestRPC.ID
-		c.newLogsSubscriptionID = ""
-		c.newLogsIsActive = false
 		return
 	}
 

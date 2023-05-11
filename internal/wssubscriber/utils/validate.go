@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+
 var adrRex = regexp.MustCompile("^0x[a-f0-9]{40}$")
 var topicsFormat = regexp.MustCompile(`^[0-9a-fA-F]*$`)
 

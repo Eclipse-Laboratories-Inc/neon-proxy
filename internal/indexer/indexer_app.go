@@ -20,6 +20,7 @@ type IndexerApp struct {
 	finalizedCollector CollectorInterface
 	confirmedCollector CollectorInterface
 
+	decodersDict            map[uint8]IxDecoderInterface
 	lastOpAccountUpdateTime int64
 
 	startBlockSlot         uint64
@@ -43,6 +44,16 @@ func NewIndexerApp(
 		return nil, err
 	}
 
+	decodersDict := make(map[uint8]IxDecoderInterface)
+	decoders := GetNeonIxDecoderList(log)
+	for _, decoder := range decoders {
+		ixCode := decoder.GetIxCode()
+		if _, ok := decodersDict[ixCode]; ok {
+			panic(fmt.Sprintf("Duplicate IXCode %d", ixCode))
+		}
+		decodersDict[ixCode] = decoder
+	}
+
 	return &IndexerApp{
 		ctx:                ctx,
 		logger:             log,
@@ -54,6 +65,7 @@ func NewIndexerApp(
 		startBlockSlot:     startSlot,
 		skipCancelTimeout:  100, //todo read from Env variable
 		holderTimeout:      100, //todo read from Env variable
+		decodersDict:       decodersDict,
 	}, nil
 }
 
@@ -112,7 +124,6 @@ func (i *IndexerApp) locateNeonBlock() {
 
 }
 
-// TODO implement to run collector
 func (i *IndexerApp) runSolanaTxCollector(state SolNeonTxDecoderState, slotProcessingDelay int) {
 
 }

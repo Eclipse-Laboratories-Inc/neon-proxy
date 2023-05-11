@@ -7,7 +7,6 @@ import (
 	"github.com/neonlabsorg/neon-proxy/pkg/solana"
 )
 
-// ConfirmedCollector implements CollectorInterface
 type ConfirmedCollector struct {
 	*SolanaTxMetaCollector
 }

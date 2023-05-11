@@ -107,6 +107,10 @@ func (zl *ZeroLogger) Error() Event {
 	return &ZeroLogEvent{event: zl.logger.Error()}
 }
 
+func (zl *ZeroLogger) Warn() Event {
+	return &ZeroLogEvent{event: zl.logger.Warn()}
+}
+
 func (zl *ZeroLogger) With() Context {
 	w := zl.logger.With()
 	return &ZeroLogContext{context: &w}

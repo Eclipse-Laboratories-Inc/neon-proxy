@@ -21,6 +21,7 @@ type Logger interface {
 	Debug() Event
 	Info() Event
 	Error() Event
+	Warn() Event
 	With() Context
 }
 

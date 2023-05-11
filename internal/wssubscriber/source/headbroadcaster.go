@@ -12,35 +12,14 @@ import (
 	"time"
 
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
-	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
 	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 )
 
 // error code is returned when specific slot is skipped, we check this and jump over skipped blocks during process
 const (
-	slotWasSkippedErrorCode    = -32007
+	slotWasSkippedErrorCode = -32007
 	blockNotAvailableErrorCode = -32004
 )
-
-type BlockData struct {
-	BlockHeight       string `json:"number"`
-	BlockTime         string `json:"timestamp"`
-	Blockhash         string `json:"hash"`
-	PreviousBlockhash string `json:"parentHash"`
-	Difficulty        string `json:"difficulty"`
-	ExtraData         string `json:"extraData"`
-	LogsBloom         string `json:"logsBloom"`
-	GasLimit          string `json:"gasLimit"`
-	TransactionsRoot  string `json:"transactionsRoot"`
-	ReceiptsRoot      string `json:"receiptsRoot"`
-	StateRoot         string `json:"stateRoot"`
-	Sha3Uncles        string `json:"sha3Uncles"`
-	Miner             string `json:"miner"`
-	Nonce             string `json:"nonce"`
-	MixHash           string `json:"mixHash"`
-	GasUsed           string `json:"gasUsed"`
-	Signature         string `json:"signature"`
-}
 
 // define block header that we broadcast to users
 type BlockHeader struct {
@@ -85,9 +64,6 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
 		// store latest processed block slot
 		var latestProcessedBlockSlot uint64
 
-		// store latest processed block hash
-		var lastProcessedBlockHash string
-
 		// subscribe to every result coming into the channel
 		for {
 			// Calling Sleep method
@@ -127,7 +103,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
 
 			// process the blocks in given interval
 			log.Info().Msg("processing blocks from " + strconv.FormatUint(latestProcessedBlockSlot, 10) + " to " + strconv.FormatUint(blockSlot.Result, 10))
-			if err := processBlocks(ctx, solanaWebsocketEndpoint, log, source, sourceError, &lastProcessedBlockHash, &latestProcessedBlockSlot, blockSlot.Result); err != nil {
+			if err := processBlocks(ctx, solanaWebsocketEndpoint, log, source, sourceError, &latestProcessedBlockSlot, blockSlot.Result); err != nil {
 				log.Error().Err(err).Msg("Error on processing blocks")
 				sourceError <- err
 				continue
@@ -139,7 +115,7 @@ func RegisterNewHeadBroadcasterSources(ctx *context.Context, log logger.Logger, 
 }
 
 // request each block from "from" to "to" from the rpc endpoint and broadcast to user
-func processBlocks(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, broadcaster chan interface{}, broadcasterErr chan error, lastProcessedBlockHash *string, from *uint64, to uint64) error {
+func processBlocks(ctx *context.Context, solanaWebsocketEndpoint string, log logger.Logger, broadcaster chan interface{}, broadcasterErr chan error, from *uint64, to uint64) error {
 	// process each block sequentially, broadcasting to peers
 	for *from < to {
 		// get block with given slot
@@ -172,6 +148,7 @@ func processBlocks(ctx *context.Context, solanaWebsocketEndpoint string, log log
 
 		// check rpc error
 		if blockHeader.Error != nil {
+			fmt.Println(blockHeader.Error)
 			// check if the given slot was skipped if so we jump over it and continue processing blocks from the next slot
 			if blockHeader.Error.Code == slotWasSkippedErrorCode {
 				*from++
@@ -183,58 +160,20 @@ func processBlocks(ctx *context.Context, solanaWebsocketEndpoint string, log log
 			}
 			return errors.New(blockHeader.Error.Message)
 		} else {
-			// marshal and send into broadcaster
-			if err := MarshalBlockData(&blockHeader, broadcaster, log, *lastProcessedBlockHash); err != nil {
+			// insert new block to be broadcasted
+			clientResponse, err := json.Marshal(blockHeader.Result)
+
+			// check json marshaling error
+			if err != nil {
+				log.Error().Err(err).Msg(fmt.Sprintf("marshalling response output: %v", err))
 				return err
-			} else {
-				*from++
-				*lastProcessedBlockHash = blockHeader.Result.Blockhash
 			}
 
+			broadcaster <- clientResponse
+			*from++
 		}
 	}
 
-	return nil
-}
-
-// extract fields from block header and broadcast
-func MarshalBlockData(blockHeader *BlockHeader, broadcaster chan interface{}, log logger.Logger, lastProcessedBlockHash string) error {
-	// declare broadcasted struct
-	var blockData BlockData
-
-	// it's the first block we are processing so we skip as we don't have previous block hash
-	if lastProcessedBlockHash == "" {
-		return nil
-	}
-
-	// fill block data
-	blockData.BlockHeight = "0x" + fmt.Sprintf("%x", blockHeader.Result.BlockHeight)
-	blockData.BlockTime = "0x" + fmt.Sprintf("%x", blockHeader.Result.BlockTime)
-	blockData.Blockhash = utils.Base64stringToHex(blockHeader.Result.Blockhash)
-	blockData.Difficulty = "0x0"
-	blockData.ExtraData = "0x0000000000000000000000000000000000000000000000000000000000000001"
-	blockData.GasLimit = "0xec8563e271ac"
-	blockData.GasUsed = "0xec8563e271ac" //TODO
-	blockData.LogsBloom = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-	blockData.Miner = "0x0000000000000000000000000000000000000000"
-	blockData.MixHash = "0x0000000000000000000000000000000000000000000000000000000000000001"
-	blockData.Nonce = "0x0000000000000000"
-	blockData.PreviousBlockhash = utils.Base64stringToHex(lastProcessedBlockHash)
-	blockData.ReceiptsRoot = "0x0000000000000000000000000000000000000000000000000000000000000001"
-	blockData.StateRoot = "0x0000000000000000000000000000000000000000000000000000000000000001"
-	blockData.TransactionsRoot = "0x0000000000000000000000000000000000000000000000000000000000000001"
-	blockData.Sha3Uncles = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
-	blockData.Signature = "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-
-	// insert new block to be broadcasted
-	clientResponse, err := json.Marshal(blockData)
-
-	// check json marshaling error
-	if err != nil {
-		log.Error().Err(err).Msg(fmt.Sprintf("marshalling response output: %v", err))
-		return err
-	}
-	broadcaster <- clientResponse
 	return nil
 }
 

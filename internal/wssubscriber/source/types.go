@@ -124,7 +124,7 @@ type NeonLogTxEvent struct {
 
 // current log and transaction index
 type Indexes struct {
-	processed        map[string]int
+	processed map[string]int
 	transactionIndex int
 	logIndex         int
 }
@@ -154,10 +154,10 @@ type EthLog struct {
 
 type LogData struct {
 	usedGas int
-	logs    []string
+	logs []string
 }
 
-type IterationCache struct {
+type IterationCache struct{
 	totalUsedGas   int
 	targetTotalGas int
 	logIterations  []LogData

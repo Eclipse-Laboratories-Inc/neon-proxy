@@ -117,7 +117,7 @@ type TxInfoDataChunk struct {
 
 // TODO implement
 func (t *TxInfoDataChunk) String() string {
-	return "" // todo implement
+	return ""
 }
 
 func (t *TxInfoDataChunk) IsValid() bool {
@@ -149,12 +149,20 @@ func NewNeonIndexedTxInfo(txType NeonIndexedTxType, key TxInfoKey, neonTx NeonTx
 	}
 }
 
-func (n NeonIndexedTxInfo) StartBlockSlot() int {
+func (n *NeonIndexedTxInfo) StartBlockSlot() int {
 	return n.startBlockSlot
 }
 
-func (n NeonIndexedTxInfo) LastBlockSlot() int {
+func (n *NeonIndexedTxInfo) LastBlockSlot() int {
 	return n.lastBlockSlot
+}
+
+func (n *NeonIndexedTxInfo) IsCanceled() bool {
+	return n.canceled
+}
+
+func (n *NeonIndexedTxInfo) LenNeonEventList() int {
+	return len(n.neonEvents)
 }
 
 func (n *NeonIndexedTxInfo) SetStatus(value TxStatus, blockSlot int) {
@@ -225,10 +233,10 @@ func (n *NeonIndexedTxInfo) CompleteEventList() {
 				}
 			}
 			isReverted = (revertedLevel != -1) || isFailed
-			isHidden = event.hidden || isReverted
+			isHidden = event.Hidden || isReverted
 		}
 		neonLogEvent := event.DeepCopy()
-		neonLogEvent.hidden = isHidden
+		neonLogEvent.Hidden = isHidden
 		neonLogEvent.reverted = isReverted
 		neonLogEvent.eventLevel = curLevel
 		neonLogEvent.eventOrder = curOrder
@@ -254,7 +262,7 @@ func NewNeonTxReceiptInfo(neonTx NeonTxInfo, neonTxRes NeonTxResultInfo) *NeonTx
 }
 
 type NeonTxInfo struct {
-	addr     string
+	addr     *string
 	sig      string
 	nonce    string
 	gasPrice string
@@ -267,6 +275,86 @@ type NeonTxInfo struct {
 	r        string
 	s        string
 	err      error
+}
+
+func (ntx *NeonTxInfo) IsValid() bool {
+	return ntx.addr != nil && ntx.err == nil
+}
+
+// TODO implement
+func NewNeonTxFromSigData(rlpSigData []byte) *NeonTxInfo {
+	return &NeonTxInfo{}
+}
+
+// TODO implement
+func NewNeonTxFromNeonSig(sig string) *NeonTxInfo {
+	return &NeonTxInfo{}
+}
+
+type NeonTxResultInfo struct {
+	blockSlot int
+	blockHash string
+	txIdx     int
+
+	solSig        string
+	solIxIdx      int
+	solIxInnerIdx int
+
+	neonSig string
+	gasUsed string
+	status  string
+
+	logs []map[string]string
+
+	canceledStatus int
+	lostStatus     int
+}
+
+func (n *NeonTxResultInfo) IsValid() bool {
+	// todo implement
+	return true
+}
+
+func (n *NeonTxResultInfo) AddEvent(ev NeonLogTxEvent) {
+	// todo implement
+}
+
+func (n *NeonTxResultInfo) SetResult(status, gasUsed string) {
+	// todo implement
+}
+
+func (n *NeonTxResultInfo) SetSolSigInfo(solSig string, idx, innerIdx int) {
+	// todo implement
+}
+
+func (n *NeonTxResultInfo) SetCanceledResult(neonTotalGasUsed int64) {
+	// todo implement
+}
+
+func (n *NeonTxResultInfo) SetBlockInfo(block SolBlockInfo, neonSig string, txIdx int, logIdx int) int {
+	n.blockSlot = block.BlockSlot
+	n.blockHash = block.BlockHash
+	n.solSig = neonSig
+	n.txIdx = txIdx
+
+	hexBlockSlot := fmt.Sprintf("0x%x", n.blockSlot)
+	hexTxIdx := fmt.Sprintf("0x%x", n.txIdx)
+	txLogIdx := 0
+
+	for _, rec := range n.logs {
+		rec["transactionHash"] = n.solSig
+		rec["blockHash"] = n.blockHash
+		rec["blockNumber"] = hexBlockSlot
+		rec["transactionIndex"] = hexTxIdx
+		if _, ok := rec["neonIsHidden"]; !ok {
+			rec["logIndex"] = fmt.Sprintf("0x%x", logIdx)
+			rec["transactionLogIndex"] = fmt.Sprintf("0x%x", txLogIdx)
+			logIdx += 1
+			txLogIdx += 1
+		}
+	}
+
+	return logIdx
 }
 
 type NeonAccountInfo struct {
@@ -372,6 +460,10 @@ func (n *NeonIndexedBlockInfo) AddNeonTxHolder(key TxInfoKey, solNeonIx SolNeonI
 	return &holder
 }
 
+func (n *NeonIndexedBlockInfo) AddNeonAccount(info NeonAccountInfo, ix SolNeonIxReceiptInfo) {
+
+}
+
 func (n *NeonIndexedBlockInfo) DeleteNeonHolder(holder NeonIndexedHolderInfo) {
 	delete(n.neonHolders, holder.key.value)
 }
@@ -418,7 +510,7 @@ func (n *NeonIndexedBlockInfo) FailNeonTx(tx NeonIndexedTxInfo) {
 	n.DeleteNeonTx(tx)
 }
 
-func (n *NeonIndexedBlockInfo) DoneNeonTx(tx NeonIndexedTxInfo, solNeonIx SolNeonIxReceiptInfo) {
+func (n *NeonIndexedBlockInfo) DoneNeonTx(tx NeonIndexedTxInfo, solNeonIx *SolNeonIxReceiptInfo) {
 	if tx.status != NeonIndexedTxInfoStatusInProgress && tx.status != NeonIndexedTxInfoStatusCanceled {
 		panic("DoneNeonTx: attempt to done the completed tx") // change warning ?
 	}
@@ -476,13 +568,13 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 			stat = *NewNeonTxStatData(txType)
 		}
 
-		neonIncome := 0
+		neonIncome := int64(0)
 		if trTypeFound && strings.HasPrefix(tx.neonReceipt.neonTx.gasPrice, "0x") {
-			decimal_num, err := strconv.ParseInt(tx.neonReceipt.neonTx.gasPrice[2:], 16, 64)
+			decimalNum, err := strconv.ParseInt(tx.neonReceipt.neonTx.gasPrice[2:], 16, 64)
 			if err != nil {
 				log.Fatal(err)
 			}
-			neonIncome = solNeonIx.metaInfo.neonGasUsed * int(decimal_num)
+			neonIncome = solNeonIx.metaInfo.neonGasUsed * decimalNum
 		}
 
 		solSpent := 0
@@ -503,7 +595,7 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 		}
 
 		if solNeonIx.metaInfo.neonTxReturn != nil {
-			if solNeonIx.metaInfo.neonTxReturn.Cancled {
+			if solNeonIx.metaInfo.neonTxReturn.Canceled {
 				stat.canceledNeonTxCnt++
 				if isOpSolNeonIx {
 					stat.opCanceledNeonTxCnt++
@@ -556,18 +648,29 @@ func (n *NeonIndexedBlockInfo) CompleteBlock(skipCancelTimeout int, holdertimeou
 	}
 }
 
+type SolBlockInfo struct {
+	// todo implement
+	BlockSlot int
+	BlockHash string
+	finalized bool
+}
+
+func (s *SolBlockInfo) SetFinalized(value bool) {
+	s.finalized = value
+}
+
 type NeonTxStatData struct {
 	txType             string
 	completedNeonTxCnt int
 	canceledNeonTxCnt  int
 	solTxCnt           int
 	solSpent           int
-	neonIncome         int
+	neonIncome         int64
 	neonStepCnt        int
 	bpfCycleCnt        int
 
 	opSolSpent           int
-	opNeonIncome         int
+	opNeonIncome         int64
 	opCompletedNeonTxCnt int
 	opCanceledNeonTxCnt  int
 }
@@ -719,7 +822,7 @@ type SolNeonTxDecoderState struct {
 	stopBlockSlot      uint64
 	solTxMetaCnt       int
 	solNeonIxCnt       int
-	solTxMetaCollector CollectorInterface
+	solTxMetaCollector CollectorInterface // todo(argishti) possible to use pointer
 
 	solTx     *SolTxReceiptInfo
 	solTxMeta *SolTxMetaInfo
