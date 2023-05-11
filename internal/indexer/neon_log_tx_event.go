@@ -23,11 +23,11 @@ const (
 
 type NeonLogTxEvent struct {
 	eventType LogTxEventType
-	Hidden    bool
+	hidden    bool
 
-	address string
-	topics  []string
-	data    string
+	address []byte
+	topics  [][]byte
+	data    []byte
 
 	solSig       string
 	idx          int
@@ -40,7 +40,7 @@ type NeonLogTxEvent struct {
 
 func (n *NeonLogTxEvent) DeepCopy() NeonLogTxEvent {
 	logEvent := *n
-	logEvent.topics = make([]string, len(n.topics))
+	logEvent.topics = make([][]byte, len(n.topics))
 	copy(logEvent.topics, n.topics)
 	return logEvent
 }
