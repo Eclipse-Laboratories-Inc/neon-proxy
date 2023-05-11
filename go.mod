@@ -4,6 +4,8 @@ go 1.20
 
 require (
 	github.com/btcsuite/btcutil v1.0.2
+	github.com/cristalhq/aconfig v0.18.4
+	github.com/cristalhq/aconfig/aconfigdotenv v0.17.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gagliardetto/solana-go v1.8.1
 	github.com/golang/mock v1.6.0
@@ -13,6 +15,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rs/zerolog v1.28.0
+	github.com/shopspring/decimal v1.3.1
 	github.com/stretchr/testify v1.8.1
 	github.com/test-go/testify v1.1.4
 	github.com/urfave/cli/v2 v2.20.3
@@ -39,6 +42,7 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.0 // indirect
+	github.com/joho/godotenv v1.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
