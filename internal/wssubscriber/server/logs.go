@@ -40,7 +40,7 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 		}
 
 		if err := c.buildFilters(filterParams); err != nil {
-			responseRPC.Error = &SubscriptionError{Code: IncorrectFilterErrorMessage, Message: err.Error()} 
+			responseRPC.Error = &SubscriptionError{Code: IncorrectFilterErrorMessage, Message: err.Error()}
 			return
 		}
 	}
