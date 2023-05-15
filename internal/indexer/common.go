@@ -2,7 +2,6 @@ package indexer
 
 import (
 	"fmt"
-	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	solana2 "github.com/neonlabsorg/neon-proxy/pkg/solana"
 	"hash/fnv"
@@ -183,6 +182,9 @@ type SolIxMetaInfo struct {
 
 	neonTxReturn *NeonLogTxReturn
 	neonTxEvents []NeonLogTxEvent
+
+	isLogTruncated     bool
+	isAlreadyFinalized bool
 }
 
 type SolTxCostInfo struct {

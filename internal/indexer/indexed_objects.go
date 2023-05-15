@@ -93,12 +93,25 @@ type TxInfoKey struct {
 	account   string
 }
 
-func NewTxInfoKey(solNeonIx SolNeonIxReceiptInfo) TxInfoKey {
+func NewNeonIndexedTxInfoKey(solNeonIx SolNeonIxReceiptInfo) TxInfoKey {
 	sign := solNeonIx.metaInfo.neonTxSig
 	if sign[:2] == "0x" {
 		sign = sign[2:]
 	}
 	return TxInfoKey{value: strings.ToLower(sign)}
+}
+
+func NewNeonIndexedHolderInfoKey(account, neonSig string) TxInfoKey {
+	sign := neonSig
+	if sign[:2] == "0x" {
+		sign = sign[2:]
+	}
+	sign = strings.ToLower(sign)
+	return TxInfoKey{
+		value:     fmt.Sprintf("%v:%v", account, sign),
+		neonTxSig: sign,
+		account:   account,
+	}
 }
 
 func (ti *TxInfoKey) String() string {
@@ -306,8 +319,8 @@ type NeonTxResultInfo struct {
 
 	logs []map[string]string
 
-	canceledStatus int
-	lostStatus     int
+	completed bool
+	canceled  bool
 }
 
 func (n *NeonTxResultInfo) IsValid() bool {
@@ -315,11 +328,23 @@ func (n *NeonTxResultInfo) IsValid() bool {
 	return true
 }
 
+func (n *NeonTxResultInfo) IsCompleted() bool {
+	return n.completed
+}
+
+func (n *NeonTxResultInfo) IsCanceled() bool {
+	return n.canceled
+}
+
 func (n *NeonTxResultInfo) AddEvent(ev NeonLogTxEvent) {
 	// todo implement
 }
 
 func (n *NeonTxResultInfo) SetResult(status, gasUsed string) {
+	// todo implement
+}
+
+func (n *NeonTxResultInfo) SetLostResult(gasUsed string) {
 	// todo implement
 }
 
@@ -437,7 +462,8 @@ func (n *NeonIndexedBlockInfo) AssSolTxCost(txCost SolTxCostInfo) {
 	n.solTxCosts = append(n.solTxCosts, txCost)
 }
 
-func (n *NeonIndexedBlockInfo) FindNeonTxHolder(key TxInfoKey, solNeonIx SolNeonIxReceiptInfo) *NeonIndexedHolderInfo {
+func (n *NeonIndexedBlockInfo) FindNeonTxHolder(account string, solNeonIx SolNeonIxReceiptInfo) *NeonIndexedHolderInfo {
+	key := NewNeonIndexedHolderInfoKey(account, solNeonIx.solSign)
 	holder, ok := n.neonHolders[key.value]
 	if ok {
 		holder.AddSolanaNeonIx(solNeonIx)
@@ -446,7 +472,8 @@ func (n *NeonIndexedBlockInfo) FindNeonTxHolder(key TxInfoKey, solNeonIx SolNeon
 	return nil
 }
 
-func (n *NeonIndexedBlockInfo) AddNeonTxHolder(key TxInfoKey, solNeonIx SolNeonIxReceiptInfo) *NeonIndexedHolderInfo {
+func (n *NeonIndexedBlockInfo) AddNeonTxHolder(account string, solNeonIx SolNeonIxReceiptInfo) *NeonIndexedHolderInfo {
+	key := NewNeonIndexedHolderInfoKey(account, solNeonIx.solSign)
 	_, ok := n.neonHolders[key.value]
 	if ok {
 		panic("AddNeonTxHolder: holder already in use!")
@@ -460,6 +487,7 @@ func (n *NeonIndexedBlockInfo) AddNeonTxHolder(key TxInfoKey, solNeonIx SolNeonI
 	return &holder
 }
 
+// TODO implement
 func (n *NeonIndexedBlockInfo) AddNeonAccount(info NeonAccountInfo, ix SolNeonIxReceiptInfo) {
 
 }
@@ -476,7 +504,8 @@ func (n *NeonIndexedBlockInfo) DoneNeonHolder(holder NeonIndexedHolderInfo) {
 	n.DeleteNeonHolder(holder)
 }
 
-func (n *NeonIndexedBlockInfo) FindNeonTx(key TxInfoKey, solNeonIx SolNeonIxReceiptInfo) *NeonIndexedTxInfo {
+func (n *NeonIndexedBlockInfo) FindNeonTx(solNeonIx SolNeonIxReceiptInfo) *NeonIndexedTxInfo {
+	key := NewNeonIndexedTxInfoKey(solNeonIx)
 	tx, ok := n.neonTxs[key.value]
 	if ok {
 		tx.AddSolanaNeonIx(solNeonIx)
@@ -485,8 +514,13 @@ func (n *NeonIndexedBlockInfo) FindNeonTx(key TxInfoKey, solNeonIx SolNeonIxRece
 	return nil
 }
 
-func (n *NeonIndexedBlockInfo) AddNeonTx(txType NeonIndexedTxType, key TxInfoKey, neonTx NeonTxInfo,
-	holderAccount string, blockedAccounts []string, solNeonIx SolNeonIxReceiptInfo) *NeonIndexedTxInfo {
+func (n *NeonIndexedBlockInfo) AddNeonTx(
+	txType NeonIndexedTxType,
+	neonTx NeonTxInfo,
+	holderAccount string, blockedAccounts []string,
+	solNeonIx SolNeonIxReceiptInfo) *NeonIndexedTxInfo {
+	key := NewNeonIndexedTxInfoKey(solNeonIx)
+
 	_, ok := n.neonTxs[key.value]
 	if ok {
 		panicMsg := fmt.Sprintf("AddNeonTx: %s tx already in use!", key.value)
@@ -557,7 +591,7 @@ func (n *NeonIndexedBlockInfo) CalculateStat(gatherStatistics bool, opAccountSet
 
 	for _, solNeonIx := range n.solNeonIxs {
 		txType := NeonIndexedTxTypeUnknown
-		tx, trTypeFound := n.neonTxs[NewTxInfoKey(solNeonIx).value]
+		tx, trTypeFound := n.neonTxs[NewNeonIndexedTxInfoKey(solNeonIx).value]
 		if trTypeFound {
 			txType = tx.txType
 		}
