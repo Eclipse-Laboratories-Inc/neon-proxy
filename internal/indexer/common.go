@@ -200,8 +200,8 @@ type SolTxCostInfo struct {
 type SolTxLogDecoder struct{} //todo move to decoder?
 
 type NeonLogTxReturn struct {
-	GasUsed  string
-	Status   string
+	GasUsed  int64
+	Status   int64
 	Canceled bool
 } // todo move to decoder?
 

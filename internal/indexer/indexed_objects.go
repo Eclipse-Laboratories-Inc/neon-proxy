@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
@@ -317,15 +318,14 @@ type NeonTxResultInfo struct {
 	gasUsed string
 	status  string
 
-	logs []map[string]string
+	logs []map[string][]string
 
 	completed bool
 	canceled  bool
 }
 
 func (n *NeonTxResultInfo) IsValid() bool {
-	// todo implement
-	return true
+	return n.gasUsed != ""
 }
 
 func (n *NeonTxResultInfo) IsCompleted() bool {
@@ -336,24 +336,72 @@ func (n *NeonTxResultInfo) IsCanceled() bool {
 	return n.canceled
 }
 
-func (n *NeonTxResultInfo) AddEvent(ev NeonLogTxEvent) {
-	// todo implement
+func (n *NeonTxResultInfo) AddEvent(event NeonLogTxEvent) {
+	if n.blockSlot != 0 {
+		return
+	}
+
+	curLog := make(map[string][]string)
+
+	var addr string
+	if event.address != "" {
+		addr = "0x" + hex.EncodeToString([]byte(event.address))
+	}
+	curLog["address"] = []string{addr}
+
+	var topics []string
+	for _, topic := range event.topics {
+		topics = append(topics, "0x"+hex.EncodeToString([]byte(topic)))
+	}
+	curLog["topics"] = topics
+
+	var data string
+	if event.data != nil {
+		data = "0x" + hex.EncodeToString(event.data)
+	}
+	curLog["data"] = []string{data}
+
+	curLog["neonSolHash"] = []string{event.solSig}
+	curLog["neonIxIdx"] = []string{fmt.Sprintf("%x", event.idx)}
+	curLog["neonInnerIxIdx"] = []string{fmt.Sprintf("%x", event.innerIdx)}
+	curLog["neonEventType"] = []string{fmt.Sprintf("%v", event.eventType)}
+	curLog["neonEventLevel"] = []string{fmt.Sprintf("%x", event.eventLevel)}
+	curLog["neonEventOrder"] = []string{fmt.Sprintf("%x", event.eventOrder)}
+
+	hidden := "false"
+	if event.Hidden {
+		hidden = "true"
+	}
+	curLog["neonIsHidden"] = []string{hidden}
+
+	reverted := "false"
+	if event.reverted {
+		reverted = "true"
+	}
+	curLog["neonIsReverted"] = []string{reverted}
+
+	n.logs = append(n.logs, curLog)
 }
 
-func (n *NeonTxResultInfo) SetResult(status, gasUsed string) {
-	// todo implement
+func (n *NeonTxResultInfo) SetResult(status, gasUsed int64) {
+	n.status = fmt.Sprintf("%x", status)
+	n.gasUsed = fmt.Sprintf("%x", gasUsed)
+	n.completed = true
 }
 
-func (n *NeonTxResultInfo) SetLostResult(gasUsed string) {
-	// todo implement
+func (n *NeonTxResultInfo) SetLostResult(gasUsed int64) {
+	n.SetResult(0, gasUsed)
 }
 
 func (n *NeonTxResultInfo) SetSolSigInfo(solSig string, idx, innerIdx int) {
-	// todo implement
+	n.solSig = solSig
+	n.solIxIdx = idx
+	n.solIxInnerIdx = innerIdx
 }
 
 func (n *NeonTxResultInfo) SetCanceledResult(neonTotalGasUsed int64) {
-	// todo implement
+	n.SetResult(0, neonTotalGasUsed)
+	n.canceled = true
 }
 
 func (n *NeonTxResultInfo) SetBlockInfo(block SolBlockInfo, neonSig string, txIdx int, logIdx int) int {
@@ -367,13 +415,13 @@ func (n *NeonTxResultInfo) SetBlockInfo(block SolBlockInfo, neonSig string, txId
 	txLogIdx := 0
 
 	for _, rec := range n.logs {
-		rec["transactionHash"] = n.solSig
-		rec["blockHash"] = n.blockHash
-		rec["blockNumber"] = hexBlockSlot
-		rec["transactionIndex"] = hexTxIdx
+		rec["transactionHash"] = []string{n.solSig}
+		rec["blockHash"] = []string{n.blockHash}
+		rec["blockNumber"] = []string{hexBlockSlot}
+		rec["transactionIndex"] = []string{hexTxIdx}
 		if _, ok := rec["neonIsHidden"]; !ok {
-			rec["logIndex"] = fmt.Sprintf("0x%x", logIdx)
-			rec["transactionLogIndex"] = fmt.Sprintf("0x%x", txLogIdx)
+			rec["logIndex"] = []string{fmt.Sprintf("0x%x", logIdx)}
+			rec["transactionLogIndex"] = []string{fmt.Sprintf("0x%x", txLogIdx)}
 			logIdx += 1
 			txLogIdx += 1
 		}
@@ -487,10 +535,8 @@ func (n *NeonIndexedBlockInfo) AddNeonTxHolder(account string, solNeonIx SolNeon
 	return &holder
 }
 
-// TODO implement
-func (n *NeonIndexedBlockInfo) AddNeonAccount(info NeonAccountInfo, ix SolNeonIxReceiptInfo) {
-
-}
+// TODO implement after implementation in python
+func (n *NeonIndexedBlockInfo) AddNeonAccount(info NeonAccountInfo, ix SolNeonIxReceiptInfo) {}
 
 func (n *NeonIndexedBlockInfo) DeleteNeonHolder(holder NeonIndexedHolderInfo) {
 	delete(n.neonHolders, holder.key.value)
@@ -683,14 +729,22 @@ func (n *NeonIndexedBlockInfo) CompleteBlock(skipCancelTimeout int, holdertimeou
 }
 
 type SolBlockInfo struct {
-	// todo implement
-	BlockSlot int
-	BlockHash string
-	finalized bool
+	BlockSlot   int
+	BlockHash   string
+	BlockTime   int64
+	BlockHeight int64
+
+	ParentBlockSlot int
+	ParentBlockHash string
+	Finalized       bool
 }
 
 func (s *SolBlockInfo) SetFinalized(value bool) {
-	s.finalized = value
+	s.Finalized = value
+}
+
+func (s *SolBlockInfo) SetBlockHash(hash string) {
+	s.BlockHash = hash
 }
 
 type NeonTxStatData struct {

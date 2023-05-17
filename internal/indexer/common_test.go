@@ -40,9 +40,9 @@ func Test_NeonTxResultInfoAddEvent(t *testing.T) {
 	n := NeonTxResultInfo{}
 	event := NeonLogTxEvent{
 		eventType:    ExitRevert,
-		address:      []byte("0x001"),
+		address:      "0x001",
 		data:         []byte("0x002"),
-		hidden:       true,
+		Hidden:       true,
 		solSig:       "0x:003",
 		idx:          4,
 		innerIdx:     2,

@@ -138,12 +138,10 @@ func (b *BaseTxIxDecoder) decodeNeonTx() *NeonTxInfo {
 	return NewNeonTxFromNeonSig(b.state.SolNeonIx().metaInfo.neonTxSig)
 }
 
-// TODO reimplementation in child classes
 func (b *BaseTxIxDecoder) decodeHolderAccount() string {
 	panic("Call of not-implemented method to decode NeonHolder.Account")
 }
 
-// TODO reimplementation in child classes
 func (b *BaseTxIxDecoder) decodeIterBlockedAccount() []string {
 	panic("Call of not-implemented method to decode NeonTx.BlockedAccounts")
 }
@@ -306,7 +304,7 @@ func (b *BaseTxSimpleIxDecoder) decodeNeonTxReturn(tx *NeonIndexedTxInfo) bool {
 		return true
 	}
 	ix := b.state.SolNeonIx()
-	tx.neonReceipt.neonTxRes.SetLostResult(fmt.Sprintf("%d", ix.metaInfo.neonTotalGasUsed))
+	tx.neonReceipt.neonTxRes.SetLostResult(ix.metaInfo.neonTotalGasUsed)
 	b.log.Warn().Msg(fmt.Sprintf("set lost result (is_log_truncated ?= (%v) - %v", ix.metaInfo.isLogTruncated, tx))
 	return true
 }
@@ -427,7 +425,7 @@ func (btd *BaseTxStepIxDecoder) DecodeFailedNeonTxEventList() {
 		cnt++
 
 		if ix.metaInfo.isAlreadyFinalized && !tx.neonReceipt.neonTxRes.IsValid() {
-			tx.neonReceipt.neonTxRes.SetLostResult(fmt.Sprintf("%v", 1)) // unknown gas usage
+			tx.neonReceipt.neonTxRes.SetLostResult(1) // unknown gas usage
 			btd.log.Warn().Msg("set lost result")
 			btd.decodingDone(tx, "complete by lost result")
 		}
@@ -502,29 +500,29 @@ func (tsd *TxStepFromDataIxDecoder) decodeNeonTx() *NeonTxInfo {
 }
 
 type TxStepFromAccountIxDecoder struct {
-	baseDecoder *BaseTxStepIxDecoder
+	*BaseTxStepIxDecoder
 }
 
 func (tsd *TxStepFromAccountIxDecoder) Execute() bool {
-	return tsd.baseDecoder.decodeTx("NeonTx step from NeonHolder.Data")
+	return tsd.decodeTx("NeonTx step from NeonHolder.Data")
 }
 
 func (tsd *TxStepFromAccountIxDecoder) addReturnEvent(tx *NeonIndexedTxInfo) {
-	tsd.baseDecoder.decodeNeonTxFromHolderAccount(tx)
-	tsd.baseDecoder.addReturnEvent(tx)
+	tsd.decodeNeonTxFromHolderAccount(tx)
+	tsd.BaseTxStepIxDecoder.addReturnEvent(tx)
 }
 
 type TxStepFromAccountNoChainIdIxDecoder struct {
-	baseDecoder *BaseTxStepIxDecoder
+	*BaseTxStepIxDecoder
 }
 
 func (tsd *TxStepFromAccountNoChainIdIxDecoder) Execute() bool {
-	return tsd.baseDecoder.decodeTx("NeonTx-wo-ChainId step from NeonHolder.Data")
+	return tsd.decodeTx("NeonTx-wo-ChainId step from NeonHolder.Data")
 }
 
 func (tsd *TxStepFromAccountNoChainIdIxDecoder) addReturnEvent(tx *NeonIndexedTxInfo) {
-	tsd.baseDecoder.decodeNeonTxFromHolderAccount(tx)
-	tsd.baseDecoder.addReturnEvent(tx)
+	tsd.decodeNeonTxFromHolderAccount(tx)
+	tsd.BaseTxStepIxDecoder.addReturnEvent(tx)
 }
 
 type CollectTreasureIxDecoder struct {
