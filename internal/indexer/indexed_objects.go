@@ -3,6 +3,7 @@ package indexer
 import (
 	"encoding/hex"
 	"fmt"
+	utils2 "github.com/neonlabsorg/neon-proxy/pkg/utils"
 	"log"
 	"math"
 	"sort"
@@ -80,12 +81,12 @@ const (
 type NeonIndexedTxType int
 
 const (
-	NeonIndexedTxTypeUnknown NeonIndexedTxType = iota
-	NeonIndexedTxTypeSingle
-	NeonIndexedTxTypeSingleFromAccount
-	NeonIndexedTxTypeIterFromData
-	NeonIndexedTxTypeIterFromAccount
-	NeonIndexedTxTypeIterFromAccountWoChainId
+	NeonIndexedTxTypeUnknown                  NeonIndexedTxType = 0
+	NeonIndexedTxTypeSingle                   NeonIndexedTxType = 0x1f
+	NeonIndexedTxTypeSingleFromAccount        NeonIndexedTxType = 0x2a
+	NeonIndexedTxTypeIterFromData             NeonIndexedTxType = 0x20
+	NeonIndexedTxTypeIterFromAccount          NeonIndexedTxType = 0x21
+	NeonIndexedTxTypeIterFromAccountWoChainId NeonIndexedTxType = 0x22
 )
 
 type TxInfoKey struct {
@@ -153,6 +154,9 @@ type NeonIndexedTxInfo struct {
 }
 
 func NewNeonIndexedTxInfo(txType NeonIndexedTxType, key TxInfoKey, neonTx NeonTxInfo, holderAccount string, blockedAccounts []string) *NeonIndexedTxInfo {
+	if key.IsEmpty() {
+		panic("TxInfoKey info key can't be empty")
+	}
 	return &NeonIndexedTxInfo{
 		key:             key,
 		neonReceipt:     NewNeonTxReceiptInfo(neonTx, NeonTxResultInfo{}),
@@ -291,18 +295,44 @@ type NeonTxInfo struct {
 	err      error
 }
 
+func NewNeonTxInfoFromNeonTx(tx *utils2.NeonTx) *NeonTxInfo {
+	addr := tx.HexSender()
+
+	return &NeonTxInfo{
+		addr:     &addr,
+		sig:      tx.HexTxSig(),
+		nonce:    hex.EncodeToString(tx.Nonce.Bytes()),
+		gasPrice: hex.EncodeToString(tx.GasPrice.Bytes()),
+		gasLimit: hex.EncodeToString(tx.GasLimit.Bytes()),
+		toAddr:   tx.HexToAddress(),
+		contract: tx.HexContract(),
+		value:    hex.EncodeToString(tx.Value.Bytes()),
+		callData: tx.HexCallData(),
+		v:        hex.EncodeToString(tx.V.Bytes()),
+		r:        hex.EncodeToString(tx.R.Bytes()),
+		s:        hex.EncodeToString(tx.S.Bytes()),
+	}
+}
+
 func (ntx *NeonTxInfo) IsValid() bool {
 	return ntx.addr != nil && ntx.err == nil
 }
 
-// TODO implement
+// TODO remove stab
 func NewNeonTxFromSigData(rlpSigData []byte) *NeonTxInfo {
-	return &NeonTxInfo{}
+	tx, err := utils2.NewNeonTxFromString(rlpSigData) // TODO uncomment after tests
+	if err != nil {
+		return &NeonTxInfo{err: err}
+	}
+
+	return NewNeonTxInfoFromNeonTx(tx)
+
+	/*	addr := ""
+		return &NeonTxInfo{sig: "54686520717569636b2062726f776e20666f78206a756d7073206f7665722074", addr: &addr}*/
 }
 
-// TODO implement
 func NewNeonTxFromNeonSig(sig string) *NeonTxInfo {
-	return &NeonTxInfo{}
+	return &NeonTxInfo{sig: sig}
 }
 
 type NeonTxResultInfo struct {
@@ -390,7 +420,9 @@ func (n *NeonTxResultInfo) SetResult(status, gasUsed int64) {
 }
 
 func (n *NeonTxResultInfo) SetLostResult(gasUsed int64) {
-	n.SetResult(0, gasUsed)
+	n.status = fmt.Sprintf("%x", 0)
+	n.gasUsed = fmt.Sprintf("%x", gasUsed)
+	n.completed = false
 }
 
 func (n *NeonTxResultInfo) SetSolSigInfo(solSig string, idx, innerIdx int) {
@@ -444,9 +476,9 @@ type NeonIndexedBlockInfo struct {
 	completed         bool
 
 	neonHolders map[string]NeonIndexedHolderInfo
-	neonTxs     map[string]NeonIndexedTxInfo
+	neonTxs     map[string]*NeonIndexedTxInfo
 
-	doneNeonTxs []NeonIndexedTxInfo
+	doneNeonTxs []*NeonIndexedTxInfo
 
 	solNeonIxs []SolNeonIxReceiptInfo
 	solTxCosts []SolTxCostInfo
@@ -459,7 +491,7 @@ func NewNeonIndexedBlockInfo(historyBlockDeque []SolBlockInfo) *NeonIndexedBlock
 		solBlock:          historyBlockDeque[len(historyBlockDeque)-1],
 		historyBlockDeque: historyBlockDeque,
 		neonHolders:       make(map[string]NeonIndexedHolderInfo),
-		neonTxs:           make(map[string]NeonIndexedTxInfo),
+		neonTxs:           make(map[string]*NeonIndexedTxInfo),
 		StatNeonTxs:       make(map[NeonIndexedTxType]NeonTxStatData),
 	}
 }
@@ -535,7 +567,6 @@ func (n *NeonIndexedBlockInfo) AddNeonTxHolder(account string, solNeonIx SolNeon
 	return &holder
 }
 
-// TODO implement after implementation in python
 func (n *NeonIndexedBlockInfo) AddNeonAccount(info NeonAccountInfo, ix SolNeonIxReceiptInfo) {}
 
 func (n *NeonIndexedBlockInfo) DeleteNeonHolder(holder NeonIndexedHolderInfo) {
@@ -555,7 +586,7 @@ func (n *NeonIndexedBlockInfo) FindNeonTx(solNeonIx SolNeonIxReceiptInfo) *NeonI
 	tx, ok := n.neonTxs[key.value]
 	if ok {
 		tx.AddSolanaNeonIx(solNeonIx)
-		return &tx
+		return tx
 	}
 	return nil
 }
@@ -575,22 +606,22 @@ func (n *NeonIndexedBlockInfo) AddNeonTx(
 
 	tx := NewNeonIndexedTxInfo(txType, key, neonTx, holderAccount, blockedAccounts)
 	tx.AddSolanaNeonIx(solNeonIx)
-	n.neonTxs[key.value] = *tx
+	n.neonTxs[key.value] = tx
 	return tx
 }
 
-func (n *NeonIndexedBlockInfo) DeleteNeonTx(tx NeonIndexedTxInfo) {
+func (n *NeonIndexedBlockInfo) DeleteNeonTx(tx *NeonIndexedTxInfo) {
 	delete(n.neonTxs, tx.key.value)
 }
 
-func (n *NeonIndexedBlockInfo) FailNeonTx(tx NeonIndexedTxInfo) {
+func (n *NeonIndexedBlockInfo) FailNeonTx(tx *NeonIndexedTxInfo) {
 	if tx.status != NeonIndexedTxInfoStatusInProgress && tx.status != NeonIndexedTxInfoStatusCanceled {
 		panic("FailNeonTx: attempt to fail the completed tx") // change warning ?
 	}
 	n.DeleteNeonTx(tx)
 }
 
-func (n *NeonIndexedBlockInfo) DoneNeonTx(tx NeonIndexedTxInfo, solNeonIx *SolNeonIxReceiptInfo) {
+func (n *NeonIndexedBlockInfo) DoneNeonTx(tx *NeonIndexedTxInfo, solNeonIx *SolNeonIxReceiptInfo) {
 	if tx.status != NeonIndexedTxInfoStatusInProgress && tx.status != NeonIndexedTxInfoStatusCanceled {
 		panic("DoneNeonTx: attempt to done the completed tx") // change warning ?
 	}

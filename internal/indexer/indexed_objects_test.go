@@ -12,7 +12,7 @@ func Test_NewTxInfoKey(t *testing.T) {
 			neonTxSig: "0x:123",
 		},
 	}
-	assert.Equal(t, ":123", NewTxInfoKey(solNeonIx).value)
+	assert.Equal(t, ":123", NewNeonIndexedTxInfoKey(solNeonIx).value)
 }
 
 func Test_CompleteEventListInvalid(t *testing.T) {
@@ -63,9 +63,9 @@ func Test_CompleteEventListValid(t *testing.T) {
 		neonEvents: []NeonLogTxEvent{
 			{
 				eventType:    ExitRevert,
-				address:      []byte("0x123"),
+				address:      "0x123",
 				data:         []byte("0x456"),
-				hidden:       true,
+				Hidden:       true,
 				solSig:       "0x:789",
 				idx:          4,
 				innerIdx:     2,
@@ -74,9 +74,9 @@ func Test_CompleteEventListValid(t *testing.T) {
 			},
 			{
 				eventType:    ExitStop,
-				address:      []byte("0x10123"),
+				address:      "0x10123",
 				data:         []byte("0x10456"),
-				hidden:       true,
+				Hidden:       true,
 				solSig:       "0x:10789",
 				idx:          7,
 				innerIdx:     5,
@@ -128,14 +128,14 @@ func Test_NeonIndexedBlockInfoAddTxHolder(t *testing.T) {
 		},
 	}
 
-	neonBlockInfo.AddNeonTxHolder(NewTxInfoKey(solNeonIx), solNeonIx)
+	neonBlockInfo.AddNeonTxHolder("123", solNeonIx)
 	assert.Equal(t, 1, len(neonBlockInfo.neonHolders))
 	assert.Equal(t, ":123", neonBlockInfo.neonHolders[":123"].key.value)
 }
 
 func Test_NeonIndexedBlockInfoAddNeonTx(t *testing.T) {
 	neonBlockInfo := NeonIndexedBlockInfo{
-		neonTxs: make(map[string]NeonIndexedTxInfo),
+		neonTxs: make(map[string]*NeonIndexedTxInfo),
 	}
 
 	solNeonIx := SolNeonIxReceiptInfo{
@@ -144,7 +144,7 @@ func Test_NeonIndexedBlockInfoAddNeonTx(t *testing.T) {
 		},
 	}
 
-	neonBlockInfo.AddNeonTx(NeonIndexedTxTypeSingle, NewTxInfoKey(solNeonIx), NeonTxInfo{}, "", []string{}, solNeonIx)
+	neonBlockInfo.AddNeonTx(NeonIndexedTxTypeSingle, NeonTxInfo{}, "", []string{}, solNeonIx)
 	assert.Equal(t, 1, len(neonBlockInfo.neonTxs))
 	assert.Equal(t, ":123", neonBlockInfo.neonTxs[":123"].key.value)
 }

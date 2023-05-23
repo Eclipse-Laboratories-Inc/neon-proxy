@@ -63,48 +63,53 @@ func (ixd *IxDecoder) InitState(state SolNeonTxDecoderState) {
 }
 
 func (ixd *IxDecoder) decodingSuccess(indxObj any, msg string) bool {
+	// The instruction has been successfully parsed
 	ixd.log.Debug().Msgf("decoding success: %v -  %v", msg, indxObj)
 	return true
 }
 
 func (ixd *IxDecoder) decodingSkip(reason string) bool {
 	ixd.log.Warn().Msgf("decoding skip: %v", reason)
-	return true
+	return false
 }
 
 func (ixd *IxDecoder) decodingDone(indxObj any, msg string) bool {
+	// Assembling of the object has been successfully finished.
 	block := ixd.state.NeonBlock()
 
-	if neonTxInfo, ok := indxObj.(NeonIndexedTxInfo); ok {
+	if neonTxInfo, ok := indxObj.(*NeonIndexedTxInfo); ok {
 		block.DoneNeonTx(neonTxInfo, ixd.state.SolNeonIx())
 	} else if neonIndexedHolderInfo, ok := indxObj.(NeonIndexedHolderInfo); ok {
 		block.DoneNeonHolder(neonIndexedHolderInfo)
-	} else {
-		ixd.log.Warn().Msgf("unknown indexed object type: %v - %v", msg, indxObj)
-		return true
 	}
 
 	ixd.log.Debug().Msgf("decoding done: %v - %v", msg, indxObj)
 	return true
 }
 
-func (ixd *IxDecoder) decodeNeonTxCancelReturn(tx *NeonIndexedTxInfo) bool {
-	if tx.txType == NeonIndexedTxTypeSingleFromAccount ||
-		tx.txType == NeonIndexedTxTypeSingle {
-		return false
-	}
+type decodeIterBlockedAccountFunc func() []string
 
-	ix := ixd.state.solNeonIx
-	if !tx.IsCanceled() {
-		return false
-	}
+type decodeHolderAccountFunc func() *string
 
-	tx.neonReceipt.neonTxRes.SetCanceledResult(ix.metaInfo.neonTotalGasUsed)
-	return true
-}
+type decodeNeonTxFunc func() *NeonTxInfo
+
+type addReturnEventFunc func(tx *NeonIndexedTxInfo)
+
+type decodeNeonTxReturnFunc func(tx *NeonIndexedTxInfo) bool
 
 type BaseTxIxDecoder struct {
 	*IxDecoder
+	decodeHolderAccountFunc
+	decodeIterBlockedAccountFunc
+	decodeNeonTxFunc
+	decodeNeonTxReturnFunc
+	addReturnEventFunc
+}
+
+func NewBaseTxIxDecoder(ixDecoder *IxDecoder) *BaseTxIxDecoder {
+	return &BaseTxIxDecoder{
+		IxDecoder: ixDecoder,
+	}
 }
 
 func (b *BaseTxIxDecoder) addNeonIndexedTx() *NeonIndexedTxInfo {
@@ -120,7 +125,7 @@ func (b *BaseTxIxDecoder) addNeonIndexedTx() *NeonIndexedTxInfo {
 	}
 
 	holderAccount := b.decodeHolderAccount()
-	if len(holderAccount) == 0 {
+	if holderAccount == nil {
 		return nil
 	}
 
@@ -131,19 +136,32 @@ func (b *BaseTxIxDecoder) addNeonIndexedTx() *NeonIndexedTxInfo {
 
 	block := b.state.NeonBlock()
 	txType := NeonIndexedTxType(b.ixCode)
-	return block.AddNeonTx(txType, *neonTx, holderAccount, iterBlockedAccount, *ix)
+	return block.AddNeonTx(txType, *neonTx, *holderAccount, iterBlockedAccount, *ix)
 }
 
 func (b *BaseTxIxDecoder) decodeNeonTx() *NeonTxInfo {
-	return NewNeonTxFromNeonSig(b.state.SolNeonIx().metaInfo.neonTxSig)
+	if b.decodeNeonTxFunc == nil {
+		return NewNeonTxFromNeonSig(b.state.SolNeonIx().metaInfo.neonTxSig)
+	}
+	return b.decodeNeonTxFunc()
 }
 
-func (b *BaseTxIxDecoder) decodeHolderAccount() string {
-	panic("Call of not-implemented method to decode NeonHolder.Account")
+func (b *BaseTxIxDecoder) decodeHolderAccount() *string {
+	if b.decodeHolderAccountFunc == nil {
+		b.decodeHolderAccountFunc = func() *string {
+			panic("Call of not-implemented method to decode NeonHolder.Account")
+		}
+	}
+	return b.decodeHolderAccountFunc()
 }
 
 func (b *BaseTxIxDecoder) decodeIterBlockedAccount() []string {
-	panic("Call of not-implemented method to decode NeonTx.BlockedAccounts")
+	if b.decodeIterBlockedAccountFunc == nil {
+		b.decodeIterBlockedAccountFunc = func() []string {
+			panic("Call of not-implemented method to decode NeonTx.BlockedAccounts")
+		}
+	}
+	return b.decodeIterBlockedAccountFunc()
 }
 
 func (b *BaseTxIxDecoder) decodeNeonTxFromHolder(holder *NeonIndexedHolderInfo) *NeonTxInfo {
@@ -221,6 +239,9 @@ func (b *BaseTxIxDecoder) decodeNeonTxReceipt(tx *NeonIndexedTxInfo) bool {
 }
 
 func (b *BaseTxIxDecoder) decodeNeonTxReturn(tx *NeonIndexedTxInfo) bool {
+	if b.decodeNeonTxReturnFunc != nil {
+		return b.decodeNeonTxReturnFunc(tx)
+	}
 	retTx := b.state.SolNeonIx().metaInfo.neonTxReturn
 	if retTx == nil {
 		return false
@@ -230,8 +251,8 @@ func (b *BaseTxIxDecoder) decodeNeonTxReturn(tx *NeonIndexedTxInfo) bool {
 }
 
 func (b *BaseTxIxDecoder) decodeNeonTxEventList(tx *NeonIndexedTxInfo) {
-	totalGasUsed := b.state.solNeonIx.metaInfo.neonTotalGasUsed
 	solNeonTx := b.state.SolNeonIx()
+	totalGasUsed := b.state.solNeonIx.metaInfo.neonTotalGasUsed
 	for _, event := range solNeonTx.metaInfo.neonTxEvents {
 		tx.AddNeonEvent(NeonLogTxEvent{
 			eventType:    event.eventType,
@@ -249,6 +270,10 @@ func (b *BaseTxIxDecoder) decodeNeonTxEventList(tx *NeonIndexedTxInfo) {
 }
 
 func (b *BaseTxIxDecoder) addReturnEvent(tx *NeonIndexedTxInfo) {
+	if b.addReturnEventFunc != nil {
+		b.addReturnEventFunc(tx)
+		return
+	}
 	txResult := tx.neonReceipt.neonTxRes
 
 	var eventType LogTxEventType
@@ -263,7 +288,6 @@ func (b *BaseTxIxDecoder) addReturnEvent(tx *NeonIndexedTxInfo) {
 
 	ix := b.state.SolNeonIx()
 	txResult.SetSolSigInfo(ix.solSign, ix.metaInfo.idx, ix.metaInfo.innerIdx)
-
 	totalGasUsed, err := strconv.ParseInt(txResult.gasUsed[2:], 16, 64)
 	if err != nil {
 		b.log.Warn().Msgf("Error parsing totalGasUsed", err)
@@ -285,6 +309,17 @@ type BaseTxSimpleIxDecoder struct {
 	*BaseTxIxDecoder
 }
 
+func NewBaseTxSimpleIxDecoder(ixDecoder *IxDecoder) *BaseTxSimpleIxDecoder {
+	return &BaseTxSimpleIxDecoder{NewBaseTxIxDecoder(ixDecoder)}
+}
+
+func InitBaseTxSimpleIxDecoder(ixDecoder *IxDecoder) *BaseTxSimpleIxDecoder {
+	decoder := NewBaseTxSimpleIxDecoder(ixDecoder)
+	decoder.BaseTxIxDecoder.decodeIterBlockedAccountFunc = decoder.decodeIterBlockedAccount
+	decoder.BaseTxIxDecoder.decodeNeonTxReturnFunc = decoder.decodeNeonTxReturn
+	return decoder
+}
+
 func (b *BaseTxSimpleIxDecoder) decodeTx(msg string) bool {
 	tx := b.addNeonIndexedTx()
 	if tx == nil {
@@ -296,13 +331,18 @@ func (b *BaseTxSimpleIxDecoder) decodeTx(msg string) bool {
 }
 
 func (b *BaseTxSimpleIxDecoder) decodeIterBlockedAccount() []string {
-	return nil
+	return []string{}
 }
 
 func (b *BaseTxSimpleIxDecoder) decodeNeonTxReturn(tx *NeonIndexedTxInfo) bool {
+	b.BaseTxIxDecoder.decodeNeonTxReturnFunc = nil
+
 	if b.BaseTxIxDecoder.decodeNeonTxReturn(tx) {
+		b.BaseTxIxDecoder.decodeNeonTxReturnFunc = b.decodeNeonTxReturn
 		return true
 	}
+	b.BaseTxIxDecoder.decodeNeonTxReturnFunc = b.decodeNeonTxReturn
+
 	ix := b.state.SolNeonIx()
 	tx.neonReceipt.neonTxRes.SetLostResult(ix.metaInfo.neonTotalGasUsed)
 	b.log.Warn().Msg(fmt.Sprintf("set lost result (is_log_truncated ?= (%v) - %v", ix.metaInfo.isLogTruncated, tx))
@@ -336,6 +376,20 @@ func (d *CreateAccount3IxDecoder) Execute() bool {
 type BaseTxStepIxDecoder struct {
 	*BaseTxIxDecoder
 	firstBlockedAccountIdx int
+}
+
+func NewBaseTxStepIxDecoder(ixDecoder *IxDecoder, indx int) *BaseTxStepIxDecoder {
+	return &BaseTxStepIxDecoder{
+		BaseTxIxDecoder:        NewBaseTxIxDecoder(ixDecoder),
+		firstBlockedAccountIdx: indx,
+	}
+}
+
+func InitBaseTxStepIxDecoder(ixDecoder *IxDecoder, indx int) *BaseTxStepIxDecoder {
+	decoder := NewBaseTxStepIxDecoder(ixDecoder, indx)
+	decoder.BaseTxIxDecoder.decodeIterBlockedAccountFunc = decoder.decodeIterBlockedAccount
+	decoder.BaseTxIxDecoder.decodeHolderAccountFunc = decoder.decodeHolderAccount
+	return decoder
 }
 
 func (btd *BaseTxStepIxDecoder) decodeTx(msg string) bool {
@@ -379,14 +433,15 @@ func (btd *BaseTxStepIxDecoder) getNeonIndexedTx() *NeonIndexedTxInfo {
 	return tx
 }
 
-func (btd *BaseTxStepIxDecoder) decodeHolderAccount() string {
+func (btd *BaseTxStepIxDecoder) decodeHolderAccount() *string {
 	ix := btd.state.SolNeonIx()
 	if ix.AccountCnt() < 1 {
 		btd.decodingSkip(fmt.Sprintf("no enough SolIx.Accounts(len=%v)", ix.AccountCnt()))
-		return ""
+		return nil
 	}
 
-	return ix.GetAccount(0)
+	account := ix.GetAccount(0)
+	return &account
 }
 
 func (btd *BaseTxStepIxDecoder) decodeIterBlockedAccount() []string {
@@ -436,15 +491,31 @@ type TxExecFromDataIxDecoder struct {
 	*BaseTxSimpleIxDecoder
 }
 
-func (txd *TxExecFromDataIxDecoder) Execute() bool {
-	return txd.decodeTx("Neon tx exec from data")
+func NewTxExecFromDataIxDecoder(ixDecoder *IxDecoder) *TxExecFromDataIxDecoder {
+	return &TxExecFromDataIxDecoder{InitBaseTxSimpleIxDecoder(ixDecoder)}
 }
 
-func (txd *TxExecFromDataIxDecoder) decodeHolderAccount() string {
-	return ""
+func InitTxExecFromDataIxDecoder(ixDecoder *IxDecoder) *TxExecFromDataIxDecoder {
+	decoder := NewTxExecFromDataIxDecoder(ixDecoder)
+	decoder.BaseTxIxDecoder.decodeHolderAccountFunc = decoder.decodeHolderAccount
+	decoder.BaseTxIxDecoder.decodeNeonTxFunc = decoder.decodeNeonTx
+	return decoder
+}
+
+func (txd *TxExecFromDataIxDecoder) Execute() bool {
+	return txd.decodeTx("NeonTx exec from SolIx.Data")
+}
+
+func (txd *TxExecFromDataIxDecoder) decodeHolderAccount() *string {
+	addr := ""
+	return &addr
 }
 
 func (txd *TxExecFromDataIxDecoder) decodeNeonTx() *NeonTxInfo {
+	/*	 1 byte  - ix
+		 4 bytes - treasury index
+		 N bytes - NeonTx */
+
 	ix := txd.state.SolNeonIx()
 	if len(ix.ixData) < 6 {
 		txd.decodingSkip(fmt.Sprintf("no enough SolIx.Data(len=%v) to decode NeonTx", len(ix.ixData)))
@@ -458,26 +529,48 @@ type TxExecFromAccountIxDecoder struct {
 	*BaseTxSimpleIxDecoder
 }
 
+func NewTxExecFromAccountIxDecoder(ixDecoder *IxDecoder) *TxExecFromAccountIxDecoder {
+	return &TxExecFromAccountIxDecoder{InitBaseTxSimpleIxDecoder(ixDecoder)}
+}
+
+func InitTxExecFromAccountIxDecoder(ixDecoder *IxDecoder) *TxExecFromAccountIxDecoder {
+	decoder := NewTxExecFromAccountIxDecoder(ixDecoder)
+	decoder.BaseTxIxDecoder.decodeHolderAccountFunc = decoder.decodeHolderAccount
+	decoder.BaseTxIxDecoder.addReturnEventFunc = decoder.addReturnEvent
+	return decoder
+}
+
 func (tad *TxExecFromAccountIxDecoder) Execute() bool {
 	return tad.decodeTx("NeonTx exec from NeonHolder.Data")
 }
 
-func (tad *TxExecFromAccountIxDecoder) decodeHolderAccount() string {
+func (tad *TxExecFromAccountIxDecoder) decodeHolderAccount() *string {
 	ix := tad.state.SolNeonIx()
 	if ix.AccountCnt() < 1 {
 		tad.decodingSkip(fmt.Sprintf("no enough SolIx.Accounts(len=%v) to get NeonHolder.Account", ix.AccountCnt()))
-		return ""
+		return nil
 	}
-	return ix.GetAccount(0)
+	account := ix.GetAccount(0)
+	return &account
 }
 
 func (tad *TxExecFromAccountIxDecoder) addReturnEvent(tx *NeonIndexedTxInfo) {
 	tad.decodeNeonTxFromHolderAccount(tx)
+
+	tad.BaseTxSimpleIxDecoder.addReturnEventFunc = nil
 	tad.BaseTxSimpleIxDecoder.addReturnEvent(tx)
 }
 
 type TxStepFromDataIxDecoder struct {
 	*BaseTxStepIxDecoder
+}
+
+func NewTxStepFromDataIxDecoder(ixDecoder *IxDecoder) *TxStepFromDataIxDecoder {
+	return &TxStepFromDataIxDecoder{InitBaseTxStepIxDecoder(ixDecoder, 6)}
+}
+
+func InitTxStepFromDataIxDecoder(ixDecoder *IxDecoder) *TxStepFromDataIxDecoder {
+	return NewTxStepFromDataIxDecoder(ixDecoder)
 }
 
 func (tsd *TxStepFromDataIxDecoder) Execute() bool {
@@ -503,17 +596,34 @@ type TxStepFromAccountIxDecoder struct {
 	*BaseTxStepIxDecoder
 }
 
+func NewTxStepFromAccountIxDecoder(ixDecoder *IxDecoder) *TxStepFromAccountIxDecoder {
+	return &TxStepFromAccountIxDecoder{InitBaseTxStepIxDecoder(ixDecoder, 6)}
+}
+
+func InitTxStepFromAccountIxDecoder(ixDecoder *IxDecoder) *TxStepFromAccountIxDecoder {
+	return NewTxStepFromAccountIxDecoder(ixDecoder)
+}
+
 func (tsd *TxStepFromAccountIxDecoder) Execute() bool {
 	return tsd.decodeTx("NeonTx step from NeonHolder.Data")
 }
 
 func (tsd *TxStepFromAccountIxDecoder) addReturnEvent(tx *NeonIndexedTxInfo) {
 	tsd.decodeNeonTxFromHolderAccount(tx)
+	tsd.BaseTxStepIxDecoder.addReturnEventFunc = nil
 	tsd.BaseTxStepIxDecoder.addReturnEvent(tx)
 }
 
 type TxStepFromAccountNoChainIdIxDecoder struct {
 	*BaseTxStepIxDecoder
+}
+
+func NewTxStepFromAccountNoChainIdIxDecoder(ixDecoder *IxDecoder) *TxStepFromAccountNoChainIdIxDecoder {
+	return &TxStepFromAccountNoChainIdIxDecoder{InitBaseTxStepIxDecoder(ixDecoder, 6)}
+}
+
+func InitTxStepFromAccountNoChainIdIxDecoder(ixDecoder *IxDecoder) *TxStepFromAccountNoChainIdIxDecoder {
+	return NewTxStepFromAccountNoChainIdIxDecoder(ixDecoder)
 }
 
 func (tsd *TxStepFromAccountNoChainIdIxDecoder) Execute() bool {
@@ -535,7 +645,16 @@ func (c *CollectTreasureIxDecoder) Execute() bool {
 
 type CancelWithHashIxDecoder struct {
 	*BaseTxStepIxDecoder
-	firstBlockedAccountIdx int
+}
+
+func NewCancelWithHashIxDecoder(ixDecoder *IxDecoder) *CancelWithHashIxDecoder {
+	return &CancelWithHashIxDecoder{BaseTxStepIxDecoder: InitBaseTxStepIxDecoder(ixDecoder, 3)}
+}
+
+func InitCancelWithHashIxDecoder(ixDecoder *IxDecoder) *CancelWithHashIxDecoder {
+	decoder := NewCancelWithHashIxDecoder(ixDecoder)
+	decoder.BaseTxIxDecoder.decodeNeonTxReturnFunc = decoder.decodeNeonTxReturn
+	return decoder
 }
 
 func (chd *CancelWithHashIxDecoder) Execute() bool {
@@ -580,6 +699,14 @@ type WriteHolderAccountIx struct {
 	*BaseTxIxDecoder
 }
 
+func NewWriteHolderAccountIx(ixDecoder *IxDecoder) *WriteHolderAccountIx {
+	return &WriteHolderAccountIx{NewBaseTxIxDecoder(ixDecoder)}
+}
+
+func InitWriteHolderAccountIx(ixDecoder *IxDecoder) *WriteHolderAccountIx {
+	return NewWriteHolderAccountIx(ixDecoder)
+}
+
 func (w *WriteHolderAccountIx) Execute() bool {
 	ix := w.state.SolNeonIx()
 	if ix.AccountCnt() < 1 {
@@ -618,7 +745,7 @@ func (w *WriteHolderAccountIx) Execute() bool {
 	holder.AddDataChank(chunk)
 
 	w.decodingSuccess(holder, fmt.Sprintf("add NeonTx.Data.Chunk %v", chunk))
-	if tx != nil {
+	if tx == nil {
 		return true
 	}
 
@@ -754,10 +881,16 @@ func (d *Deposit3IxDecoder) Execute() bool {
 }*/
 
 func convertHexStringToLittleEndianByte(hexString string) []byte {
-	hexBytes := hexString[2:] //  skip 0x
-	hexInt := uint64(0)
-	fmt.Sscanf(hexBytes, "%x", &hexInt)
-	buf := make([]byte, 1)
-	binary.LittleEndian.PutUint16(buf, uint16(hexInt))
-	return buf
+	if len(hexString) > 2 {
+		hexString = hexString[2:] //  skip 0x
+	}
+
+	hexInt, err := strconv.ParseInt(hexString, 16, 64)
+	if err != nil {
+		panic("error converting string to hex number")
+	}
+
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(hexInt))
+	return buf[:1]
 }

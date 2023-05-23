@@ -45,14 +45,14 @@ func NewIndexerApp(
 	}
 
 	decodersDict := make(map[uint8]IxDecoderInterface)
-	decoders := GetNeonIxDecoderList(log)
-	for _, decoder := range decoders {
-		ixCode := decoder.GetIxCode()
-		if _, ok := decodersDict[ixCode]; ok {
-			panic(fmt.Sprintf("Duplicate IXCode %d", ixCode))
-		}
-		decodersDict[ixCode] = decoder
-	}
+	/*	decoders := GetNeonIxDecoderList(log)
+		for _, decoder := range decoders {
+			ixCode := decoder.GetIxCode()
+			if _, ok := decodersDict[ixCode]; ok {
+				panic(fmt.Sprintf("Duplicate IXCode %d", ixCode))
+			}
+			decodersDict[ixCode] = decoder
+		}*/
 
 	return &IndexerApp{
 		ctx:                ctx,

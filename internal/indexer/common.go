@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"fmt"
+	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	solana2 "github.com/neonlabsorg/neon-proxy/pkg/solana"
 	"hash/fnv"
@@ -231,14 +232,18 @@ type SolNeonIxReceiptInfo struct {
 	accountKeys []string
 }
 
-// TODO implement
 func (sni *SolNeonIxReceiptInfo) GetAccount(accountIdx int) string {
+	if len(sni.accounts) > accountIdx {
+		keyIndx := sni.accounts[accountIdx]
+		if len(sni.accountKeys) > keyIndx {
+			return sni.accountKeys[keyIndx]
+		}
+	}
 	return ""
 }
 
-// TODO implement
 func (sni *SolNeonIxReceiptInfo) IterAccount(accountIdx int) []string {
-	return nil
+	return sni.accountKeys[accountIdx:]
 }
 
 func (sni *SolNeonIxReceiptInfo) AccountCnt() int {
