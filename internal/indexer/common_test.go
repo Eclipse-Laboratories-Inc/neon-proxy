@@ -42,7 +42,7 @@ func Test_NeonTxResultInfoAddEvent(t *testing.T) {
 		eventType:    ExitRevert,
 		address:      "0x001",
 		data:         []byte("0x002"),
-		Hidden:       true,
+		hidden:       true,
 		solSig:       "0x:003",
 		idx:          4,
 		innerIdx:     2,
