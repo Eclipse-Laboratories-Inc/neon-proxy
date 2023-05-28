@@ -66,7 +66,7 @@ func (n *NeonIndexedHolderInfo) AddDataChank(chunk TxInfoDataChunk) {
 	}
 
 	n.data = append(n.data[:chunk.offset], chunk.data...)
-	n.data = append(n.data[:chunk.offset+chunk.lenght], n.data[end:]...)
+	n.data = append(n.data, n.data[end:]...)
 	n.dataSize += chunk.lenght
 }
 
@@ -251,10 +251,10 @@ func (n *NeonIndexedTxInfo) CompleteEventList() {
 				}
 			}
 			isReverted = (revertedLevel != -1) || isFailed
-			isHidden = event.Hidden || isReverted
+			isHidden = event.hidden || isReverted
 		}
 		neonLogEvent := event.DeepCopy()
-		neonLogEvent.Hidden = isHidden
+		neonLogEvent.hidden = isHidden
 		neonLogEvent.reverted = isReverted
 		neonLogEvent.eventLevel = curLevel
 		neonLogEvent.eventOrder = curOrder
@@ -318,17 +318,12 @@ func (ntx *NeonTxInfo) IsValid() bool {
 	return ntx.addr != nil && ntx.err == nil
 }
 
-// TODO remove stab
 func NewNeonTxFromSigData(rlpSigData []byte) *NeonTxInfo {
-	tx, err := utils2.NewNeonTxFromString(rlpSigData) // TODO uncomment after tests
+	tx, err := utils2.NewNeonTxFromString(rlpSigData)
 	if err != nil {
 		return &NeonTxInfo{err: err}
 	}
-
 	return NewNeonTxInfoFromNeonTx(tx)
-
-	/*	addr := ""
-		return &NeonTxInfo{sig: "54686520717569636b2062726f776e20666f78206a756d7073206f7665722074", addr: &addr}*/
 }
 
 func NewNeonTxFromNeonSig(sig string) *NeonTxInfo {
@@ -399,7 +394,7 @@ func (n *NeonTxResultInfo) AddEvent(event NeonLogTxEvent) {
 	curLog["neonEventOrder"] = []string{fmt.Sprintf("%x", event.eventOrder)}
 
 	hidden := "false"
-	if event.Hidden {
+	if event.hidden {
 		hidden = "true"
 	}
 	curLog["neonIsHidden"] = []string{hidden}
@@ -414,14 +409,14 @@ func (n *NeonTxResultInfo) AddEvent(event NeonLogTxEvent) {
 }
 
 func (n *NeonTxResultInfo) SetResult(status, gasUsed int64) {
-	n.status = fmt.Sprintf("%x", status)
-	n.gasUsed = fmt.Sprintf("%x", gasUsed)
+	n.status = fmt.Sprintf("0x%x", status)
+	n.gasUsed = fmt.Sprintf("0x%x", gasUsed)
 	n.completed = true
 }
 
 func (n *NeonTxResultInfo) SetLostResult(gasUsed int64) {
-	n.status = fmt.Sprintf("%x", 0)
-	n.gasUsed = fmt.Sprintf("%x", gasUsed)
+	n.status = fmt.Sprintf("0x%x", 0)
+	n.gasUsed = fmt.Sprintf("0x%x", gasUsed)
 	n.completed = false
 }
 
@@ -475,7 +470,7 @@ type NeonIndexedBlockInfo struct {
 	historyBlockDeque []SolBlockInfo
 	completed         bool
 
-	neonHolders map[string]NeonIndexedHolderInfo
+	neonHolders map[string]*NeonIndexedHolderInfo
 	neonTxs     map[string]*NeonIndexedTxInfo
 
 	doneNeonTxs []*NeonIndexedTxInfo
@@ -490,7 +485,7 @@ func NewNeonIndexedBlockInfo(historyBlockDeque []SolBlockInfo) *NeonIndexedBlock
 	return &NeonIndexedBlockInfo{
 		solBlock:          historyBlockDeque[len(historyBlockDeque)-1],
 		historyBlockDeque: historyBlockDeque,
-		neonHolders:       make(map[string]NeonIndexedHolderInfo),
+		neonHolders:       make(map[string]*NeonIndexedHolderInfo),
 		neonTxs:           make(map[string]*NeonIndexedTxInfo),
 		StatNeonTxs:       make(map[NeonIndexedTxType]NeonTxStatData),
 	}
@@ -543,17 +538,17 @@ func (n *NeonIndexedBlockInfo) AssSolTxCost(txCost SolTxCostInfo) {
 }
 
 func (n *NeonIndexedBlockInfo) FindNeonTxHolder(account string, solNeonIx SolNeonIxReceiptInfo) *NeonIndexedHolderInfo {
-	key := NewNeonIndexedHolderInfoKey(account, solNeonIx.solSign)
+	key := NewNeonIndexedHolderInfoKey(account, solNeonIx.metaInfo.neonTxSig)
 	holder, ok := n.neonHolders[key.value]
 	if ok {
 		holder.AddSolanaNeonIx(solNeonIx)
-		return &holder
+		return holder
 	}
 	return nil
 }
 
 func (n *NeonIndexedBlockInfo) AddNeonTxHolder(account string, solNeonIx SolNeonIxReceiptInfo) *NeonIndexedHolderInfo {
-	key := NewNeonIndexedHolderInfoKey(account, solNeonIx.solSign)
+	key := NewNeonIndexedHolderInfoKey(account, solNeonIx.metaInfo.neonTxSig)
 	_, ok := n.neonHolders[key.value]
 	if ok {
 		panic("AddNeonTxHolder: holder already in use!")
@@ -563,21 +558,21 @@ func (n *NeonIndexedBlockInfo) AddNeonTxHolder(account string, solNeonIx SolNeon
 		key: key,
 	}
 	holder.AddSolanaNeonIx(solNeonIx)
-	n.neonHolders[key.value] = holder
+	n.neonHolders[key.value] = &holder
 	return &holder
 }
 
 func (n *NeonIndexedBlockInfo) AddNeonAccount(info NeonAccountInfo, ix SolNeonIxReceiptInfo) {}
 
-func (n *NeonIndexedBlockInfo) DeleteNeonHolder(holder NeonIndexedHolderInfo) {
+func (n *NeonIndexedBlockInfo) DeleteNeonHolder(holder *NeonIndexedHolderInfo) {
 	delete(n.neonHolders, holder.key.value)
 }
 
-func (n *NeonIndexedBlockInfo) FailNeonHolder(holder NeonIndexedHolderInfo) {
+func (n *NeonIndexedBlockInfo) FailNeonHolder(holder *NeonIndexedHolderInfo) {
 	n.DeleteNeonHolder(holder)
 }
 
-func (n *NeonIndexedBlockInfo) DoneNeonHolder(holder NeonIndexedHolderInfo) {
+func (n *NeonIndexedBlockInfo) DoneNeonHolder(holder *NeonIndexedHolderInfo) {
 	n.DeleteNeonHolder(holder)
 }
 

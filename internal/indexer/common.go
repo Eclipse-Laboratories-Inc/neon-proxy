@@ -178,7 +178,7 @@ type SolIxMetaInfo struct {
 	usedBpfCycleCnt int
 
 	neonTxSig        string
-	neonGasUsed      int64 // TODO may by decimal.Decimal (?)
+	neonGasUsed      int64
 	neonTotalGasUsed int64
 
 	neonTxReturn *NeonLogTxReturn

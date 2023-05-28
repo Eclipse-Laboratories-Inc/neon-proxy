@@ -65,7 +65,7 @@ func Test_CompleteEventListValid(t *testing.T) {
 				eventType:    ExitRevert,
 				address:      "0x123",
 				data:         []byte("0x456"),
-				Hidden:       true,
+				hidden:       true,
 				solSig:       "0x:789",
 				idx:          4,
 				innerIdx:     2,
@@ -76,7 +76,7 @@ func Test_CompleteEventListValid(t *testing.T) {
 				eventType:    ExitStop,
 				address:      "0x10123",
 				data:         []byte("0x10456"),
-				Hidden:       true,
+				hidden:       true,
 				solSig:       "0x:10789",
 				idx:          7,
 				innerIdx:     5,
@@ -119,7 +119,7 @@ func Test_CompleteEventListValid(t *testing.T) {
 
 func Test_NeonIndexedBlockInfoAddTxHolder(t *testing.T) {
 	neonBlockInfo := NeonIndexedBlockInfo{
-		neonHolders: make(map[string]NeonIndexedHolderInfo),
+		neonHolders: make(map[string]*NeonIndexedHolderInfo),
 	}
 
 	solNeonIx := SolNeonIxReceiptInfo{

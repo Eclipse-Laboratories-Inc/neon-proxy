@@ -79,7 +79,7 @@ func (ixd *IxDecoder) decodingDone(indxObj any, msg string) bool {
 
 	if neonTxInfo, ok := indxObj.(*NeonIndexedTxInfo); ok {
 		block.DoneNeonTx(neonTxInfo, ixd.state.SolNeonIx())
-	} else if neonIndexedHolderInfo, ok := indxObj.(NeonIndexedHolderInfo); ok {
+	} else if neonIndexedHolderInfo, ok := indxObj.(*NeonIndexedHolderInfo); ok {
 		block.DoneNeonHolder(neonIndexedHolderInfo)
 	}
 
@@ -253,18 +253,13 @@ func (b *BaseTxIxDecoder) decodeNeonTxReturn(tx *NeonIndexedTxInfo) bool {
 func (b *BaseTxIxDecoder) decodeNeonTxEventList(tx *NeonIndexedTxInfo) {
 	solNeonTx := b.state.SolNeonIx()
 	totalGasUsed := b.state.solNeonIx.metaInfo.neonTotalGasUsed
-	for _, event := range solNeonTx.metaInfo.neonTxEvents {
-		tx.AddNeonEvent(NeonLogTxEvent{
-			eventType:    event.eventType,
-			Hidden:       event.Hidden,
-			address:      event.address,
-			topics:       event.topics,
-			data:         event.data,
-			totalGasUsed: totalGasUsed,
-			solSig:       solNeonTx.solSign,
-			idx:          solNeonTx.metaInfo.idx,
-			innerIdx:     solNeonTx.metaInfo.innerIdx,
-		})
+	for i := range solNeonTx.metaInfo.neonTxEvents {
+		solNeonTx.metaInfo.neonTxEvents[i].totalGasUsed = solNeonTx.metaInfo.neonTotalGasUsed
+		solNeonTx.metaInfo.neonTxEvents[i].solSig = solNeonTx.solSign
+		solNeonTx.metaInfo.neonTxEvents[i].idx = solNeonTx.metaInfo.idx
+		solNeonTx.metaInfo.neonTxEvents[i].innerIdx = solNeonTx.metaInfo.innerIdx
+
+		tx.AddNeonEvent(solNeonTx.metaInfo.neonTxEvents[i])
 		totalGasUsed++
 	}
 }
@@ -288,14 +283,20 @@ func (b *BaseTxIxDecoder) addReturnEvent(tx *NeonIndexedTxInfo) {
 
 	ix := b.state.SolNeonIx()
 	txResult.SetSolSigInfo(ix.solSign, ix.metaInfo.idx, ix.metaInfo.innerIdx)
-	totalGasUsed, err := strconv.ParseInt(txResult.gasUsed[2:], 16, 64)
+
+	gasUsed := txResult.gasUsed
+	if gasUsed[:2] == "0x" {
+		gasUsed = gasUsed[2:]
+	}
+
+	totalGasUsed, err := strconv.ParseInt(gasUsed, 16, 64)
 	if err != nil {
 		b.log.Warn().Msgf("Error parsing totalGasUsed", err)
 	}
 
 	event := NeonLogTxEvent{
 		eventType:    eventType,
-		Hidden:       true,
+		hidden:       true,
 		data:         convertHexStringToLittleEndianByte(txResult.status),
 		solSig:       ix.solSign,
 		idx:          ix.metaInfo.idx,
@@ -448,6 +449,7 @@ func (btd *BaseTxStepIxDecoder) decodeIterBlockedAccount() []string {
 	ix := btd.state.SolNeonIx()
 	if ix.AccountCnt() < btd.firstBlockedAccountIdx+1 {
 		btd.decodingSkip(fmt.Sprintf("no enough SolIx.Accounts(len=%v) to get NeonTx.BlockedAccounts", ix.AccountCnt()))
+		return nil
 	}
 	return ix.IterAccount(btd.firstBlockedAccountIdx)
 }
@@ -465,7 +467,7 @@ func (btd *BaseTxStepIxDecoder) DecodeFailedNeonTxEventList() {
 	for _, event := range ix.metaInfo.neonTxEvents {
 		tx.AddNeonEvent(NeonLogTxEvent{
 			eventType:    event.eventType,
-			Hidden:       true,
+			hidden:       true,
 			address:      event.address,
 			topics:       event.topics,
 			data:         event.data,
@@ -570,7 +572,9 @@ func NewTxStepFromDataIxDecoder(ixDecoder *IxDecoder) *TxStepFromDataIxDecoder {
 }
 
 func InitTxStepFromDataIxDecoder(ixDecoder *IxDecoder) *TxStepFromDataIxDecoder {
-	return NewTxStepFromDataIxDecoder(ixDecoder)
+	decoder := NewTxStepFromDataIxDecoder(ixDecoder)
+	decoder.BaseTxIxDecoder.decodeNeonTxFunc = decoder.decodeNeonTx
+	return decoder
 }
 
 func (tsd *TxStepFromDataIxDecoder) Execute() bool {
@@ -587,6 +591,7 @@ func (tsd *TxStepFromDataIxDecoder) decodeNeonTx() *NeonTxInfo {
 	ix := tsd.state.SolNeonIx()
 	if len(ix.ixData) < 14 {
 		tsd.decodingSkip(fmt.Sprintf("no enough SolIx.Data(len=%v) to decode NeonTx", len(ix.ixData)))
+		return nil
 	}
 	rlpSigData := ix.ixData[13:]
 	return tsd.decodeNeonTxFromData("SolIx.Data", rlpSigData)
@@ -744,8 +749,8 @@ func (w *WriteHolderAccountIx) Execute() bool {
 	}
 	holder.AddDataChank(chunk)
 
-	w.decodingSuccess(holder, fmt.Sprintf("add NeonTx.Data.Chunk %v", chunk))
 	if tx == nil {
+		w.decodingSuccess(holder, fmt.Sprintf("add NeonTx.Data.Chunk %v", chunk))
 		return true
 	}
 
@@ -753,6 +758,7 @@ func (w *WriteHolderAccountIx) Execute() bool {
 	if neonTx != nil {
 		tx.SetNeonTx(*neonTx, *holder)
 	}
+	w.decodingSuccess(holder, fmt.Sprintf("add NeonTx.Data.Chunk %v", chunk))
 	return true
 }
 
@@ -882,7 +888,9 @@ func (d *Deposit3IxDecoder) Execute() bool {
 
 func convertHexStringToLittleEndianByte(hexString string) []byte {
 	if len(hexString) > 2 {
-		hexString = hexString[2:] //  skip 0x
+		if hexString[:2] == "0x" {
+			hexString = hexString[2:] //  skip 0x
+		}
 	}
 
 	hexInt, err := strconv.ParseInt(hexString, 16, 64)
