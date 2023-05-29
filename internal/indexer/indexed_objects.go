@@ -387,11 +387,11 @@ func (n *NeonTxResultInfo) AddEvent(event NeonLogTxEvent) {
 	curLog["data"] = []string{data}
 
 	curLog["neonSolHash"] = []string{event.solSig}
-	curLog["neonIxIdx"] = []string{fmt.Sprintf("%x", event.idx)}
-	curLog["neonInnerIxIdx"] = []string{fmt.Sprintf("%x", event.innerIdx)}
+	curLog["neonIxIdx"] = []string{fmt.Sprintf("0x%x", event.idx)}
+	curLog["neonInnerIxIdx"] = []string{fmt.Sprintf("0x%x", event.innerIdx)}
 	curLog["neonEventType"] = []string{fmt.Sprintf("%v", event.eventType)}
-	curLog["neonEventLevel"] = []string{fmt.Sprintf("%x", event.eventLevel)}
-	curLog["neonEventOrder"] = []string{fmt.Sprintf("%x", event.eventOrder)}
+	curLog["neonEventLevel"] = []string{fmt.Sprintf("0x%x", event.eventLevel)}
+	curLog["neonEventOrder"] = []string{fmt.Sprintf("0x%x", event.eventOrder)}
 
 	hidden := "false"
 	if event.hidden {
