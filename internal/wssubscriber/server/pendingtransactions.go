@@ -23,11 +23,12 @@ func (c *Client) subscribeToNewPendingTransactions(requestRPC SubscribeJsonRPC, 
 	c.pendingTransactionsSource = c.pendingTransactionsBroadcaster.Subscribe()
 
 	// generate subscription id
-	responseRPC.Result = utils.NewID()
+	r := utils.NewID()
+	responseRPC.Result = r
 	responseRPC.ID = requestRPC.ID
 
 	// register subscription id for client
-	c.pendingTransactionsSubscriptionID = responseRPC.Result
+	c.pendingTransactionsSubscriptionID = r
 	c.pendingTransactionsIsActive = true
 	go c.CollectPendingTransactions()
 }

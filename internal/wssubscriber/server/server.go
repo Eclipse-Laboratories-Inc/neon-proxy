@@ -17,8 +17,8 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-func NewServer(ctx *context.Context, log logger.Logger) *Server {
-	return &Server{ctx: ctx, log: log}
+func NewServer(ctx *context.Context, log logger.Logger, endpoint string) *Server {
+	return &Server{ctx: ctx, log: log, evmRpcEndpoint: endpoint}
 }
 
 type Server struct {
@@ -34,6 +34,8 @@ type Server struct {
 
 	// logger instance
 	log logger.Logger
+
+	evmRpcEndpoint string
 }
 
 // upgrade connection to websocket and register the client
@@ -48,7 +50,7 @@ func (server *Server) wsEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create a new client associated with the connection
-	client := NewClient(conn, server.log, server.newHeadsBroadcaster, server.pendingTransactionBroadcaster, server.logsBroadcaster)
+	client := NewClient(conn, server.log, server.newHeadsBroadcaster, server.pendingTransactionBroadcaster, server.logsBroadcaster, server.evmRpcEndpoint)
 
 	// listen for incoming subscriptions.
 	go client.ReadPump()

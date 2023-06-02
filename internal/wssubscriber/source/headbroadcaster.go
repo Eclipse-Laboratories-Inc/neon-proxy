@@ -255,3 +255,7 @@ func jsonRPC(jsonStr []byte, url string, requestType string) ([]byte, error) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	return body, nil
 }
+
+func EvmJsonRpc(jsonStr []byte, url string) ([]byte, error) {
+	return jsonRPC(jsonStr, url, "POST")
+}

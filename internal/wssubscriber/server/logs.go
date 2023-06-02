@@ -49,13 +49,14 @@ func (c *Client) subscribeToNewLogs(requestRPC SubscribeJsonRPC, responseRPC *Su
 	c.newLogsSource = c.newLogsBroadcaster.Subscribe()
 
 	// generate subscription id
-	responseRPC.Result = utils.NewID()
+	r := utils.NewID()
+	responseRPC.Result = r
 	responseRPC.ID = requestRPC.ID
 
 	// register subscription id for client
-	c.newLogsSubscriptionID = responseRPC.Result
+	c.newLogsSubscriptionID = r
 	c.newLogsIsActive = true
-	c.log.Info().Msg("NewLogs subscription succeeded with ID: " + responseRPC.Result)
+	c.log.Info().Msg("NewLogs subscription succeeded with ID: " + r)
 	go c.CollectNewLogs()
 }
 
