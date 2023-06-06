@@ -457,7 +457,7 @@ func GetEvents(logMessages []string) ([]Event, error) {
 			evmProgramStartIndex := k + 1
 			k++
 			// find the end of the evm program call
-			for {
+			for k < len(logMessages) {
 				// check if we find evm program end, if that call succeeded we parse logs inside the segment
 				if len(logMessages[k]) >= len(EvmInvocationSuccessEnd) && logMessages[k][0:len(EvmInvocationSuccessEnd)] == EvmInvocationSuccessEnd {
 					eventLogs, isIteration, txHash, usedGas, err := parseLogs(logMessages[evmProgramStartIndex:k])

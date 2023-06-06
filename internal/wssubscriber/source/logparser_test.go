@@ -1,11 +1,22 @@
 package source
 
 import (
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/config"
+	"github.com/test-go/testify/assert"
+	"os"
 	"testing"
 )
 
 func TestSimpleLogs(t *testing.T) {
-	logMessages := [50]string{"Program ComputeBudget111111111111111111111111111111 invoke [1]",
+	err := os.Setenv("EVM_ADDRESS", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
+	assert.Empty(t, err)
+
+	EvmInvocationLog = "Program " + os.Getenv(config.EvmAddress) + " invoke"
+	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
+	EvmInvocationFailEnd = "Program " + os.Getenv(config.EvmAddress) + " fail"
+
+	logMessages := [50]string{
+		"Program ComputeBudget111111111111111111111111111111 invoke [1]",
 		"Program ComputeBudget111111111111111111111111111111 success",
 		"Program ComputeBudget111111111111111111111111111111 invoke [1]",
 		"Program ComputeBudget111111111111111111111111111111 success",
@@ -98,7 +109,15 @@ func TestSimpleLogs(t *testing.T) {
 }
 
 func TestDoubleTxHash(t *testing.T) {
-	logMessages := [50]string{"Program ComputeBudget111111111111111111111111111111 invoke [1]",
+	err := os.Setenv("EVM_ADDRESS", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
+	assert.Empty(t, err)
+
+	EvmInvocationLog = "Program " + os.Getenv(config.EvmAddress) + " invoke"
+	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
+	EvmInvocationFailEnd = "Program " + os.Getenv(config.EvmAddress) + " fail"
+
+	logMessages := [50]string{
+		"Program ComputeBudget111111111111111111111111111111 invoke [1]",
 		"Program ComputeBudget111111111111111111111111111111 success",
 		"Program ComputeBudget111111111111111111111111111111 invoke [1]",
 		"Program ComputeBudget111111111111111111111111111111 success",
@@ -148,14 +167,22 @@ func TestDoubleTxHash(t *testing.T) {
 		"Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU success"}
 
 	// get events from logs
-	_, err := GetEvents(logMessages[:])
+	_, err = GetEvents(logMessages[:])
 	if err != nil {
 		t.Errorf("must not have error here for having tx hash twice in the logs")
 	}
 }
 
 func TestUnfinishedEnterCall(t *testing.T) {
-	logMessages := [60]string{"Program ComputeBudget111111111111111111111111111111 invoke [1]",
+	err := os.Setenv("EVM_ADDRESS", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
+	assert.Empty(t, err)
+
+	EvmInvocationLog = "Program " + os.Getenv(config.EvmAddress) + " invoke"
+	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
+	EvmInvocationFailEnd = "Program " + os.Getenv(config.EvmAddress) + " fail"
+
+	logMessages := [60]string{
+		"Program ComputeBudget111111111111111111111111111111 invoke [1]",
 		"Program ComputeBudget111111111111111111111111111111 success",
 		"Program ComputeBudget111111111111111111111111111111 invoke [1]",
 		"Program ComputeBudget111111111111111111111111111111 success",
@@ -205,14 +232,22 @@ func TestUnfinishedEnterCall(t *testing.T) {
 		"Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU success"}
 
 	// get events from logs
-	_, err := GetEvents(logMessages[:])
+	_, err = GetEvents(logMessages[:])
 	if err == nil {
 		t.Errorf("processing logs must have error for unfinished evm function calls")
 	}
 }
 
 func TestSkippingUnfinishedTx(t *testing.T) {
-	logMessages := [50]string{"Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU invoke [1]",
+	err := os.Setenv("EVM_ADDRESS", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
+	assert.Empty(t, err)
+
+	EvmInvocationLog = "Program " + os.Getenv(config.EvmAddress) + " invoke"
+	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
+	EvmInvocationFailEnd = "Program " + os.Getenv(config.EvmAddress) + " fail"
+
+	logMessages := [5]string{
+		"Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU invoke [1]",
 		"Program log: Instruction: Write To Holder",
 		"Program data: SEFTSA== LjyfNnLCzXkN38xkBWIcJdsk37YE56M5y7g4tKF9mpo=",
 		"Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU consumed 4008 of 200000 compute units",
@@ -230,6 +265,13 @@ func TestSkippingUnfinishedTx(t *testing.T) {
 }
 
 func TestManyGasOuts(t *testing.T) {
+	err := os.Setenv("EVM_ADDRESS", "ComputeBudget111111111111111111111111111111")
+	assert.Empty(t, err)
+
+	EvmInvocationLog = "Program " + os.Getenv(config.EvmAddress) + " invoke"
+	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
+	EvmInvocationFailEnd = "Program " + os.Getenv(config.EvmAddress) + " fail"
+
 	logMessages := [60]string{"Program ComputeBudget111111111111111111111111111111 invoke [1]",
 		"Program ComputeBudget111111111111111111111111111111 success",
 		"Program ComputeBudget111111111111111111111111111111 invoke [1]",
@@ -287,7 +329,30 @@ func TestManyGasOuts(t *testing.T) {
 		"Program eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU success"}
 
 	// get events from logs
-	_, err := GetEvents(logMessages[:])
+	_, err = GetEvents(logMessages[:])
+	if err != nil {
+		t.Errorf("must not have error here for having tx hash twice in the logs")
+	}
+}
+
+// test checks bug, detected 6.06.2023 NDEV-1754
+func TestInvokeWithoutSuccess(t *testing.T) {
+	err := os.Setenv("EVM_ADDRESS", "ComputeBudget111111111111111111111111111111")
+	assert.Empty(t, err)
+
+	EvmInvocationLog = "Program " + os.Getenv(config.EvmAddress) + " invoke"
+	EvmInvocationSuccessEnd = "Program " + os.Getenv(config.EvmAddress) + " success"
+	EvmInvocationFailEnd = "Program " + os.Getenv(config.EvmAddress) + " fail"
+
+	logMessages := [7]string{
+		"Program ComputeBudget111111111111111111111111111111 invoke [1]",
+		"Program data: R0FT ECcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= ECcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		"Program data: R0FT ECcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= ECcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		"Program data: R0FT ECcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= ECcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+	}
+
+	// get events from logs
+	_, err = GetEvents(logMessages[:])
 	if err != nil {
 		t.Errorf("must not have error here for having tx hash twice in the logs")
 	}
