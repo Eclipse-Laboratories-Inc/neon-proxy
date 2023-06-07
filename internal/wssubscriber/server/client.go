@@ -40,6 +40,7 @@ const (
 	IncorrectParameterTypeErrorCode      = -4
 	SubscriptionAlreadyActiveErrorCode   = -5
 	IncorrectFilterErrorMessage          = -6
+	EvmRpcFailed                         = -7
 )
 
 // defining each connection parameters
