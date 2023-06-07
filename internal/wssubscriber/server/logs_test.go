@@ -110,7 +110,7 @@ func TestFilterLogs(t *testing.T) {
 	  }`)
 
 	t.Run("no filters set up", func(t *testing.T) {
-		c.logsFilters = &logsFilters{}
+		c.logsFilters = logsFilters{}
 		filteredLog, err := c.FilterLogs(log)
 		assert.NoError(t, err)
 		assert.Equal(t, log, filteredLog)
@@ -119,7 +119,7 @@ func TestFilterLogs(t *testing.T) {
 	t.Run("filter by topic set up and topic found", func(t *testing.T) {
 		topics := make([][]string, 1)
 		topics[0] = []string{"0x95b4472199b7a3877350ba99969c60f547e6f9ecae0f13e99b71d1aaff9e2612"}
-		c.logsFilters = &logsFilters{
+		c.logsFilters = logsFilters{
 			Topics: topics,
 		}
 
@@ -131,7 +131,7 @@ func TestFilterLogs(t *testing.T) {
 	t.Run("filter by topic set up and topic not found", func(t *testing.T) {
 		topics := make([][]string, 1)
 		topics[0] = []string{"0x1234567890abcdef"}
-		c.logsFilters = &logsFilters{
+		c.logsFilters = logsFilters{
 			Topics: topics,
 		}
 
@@ -143,7 +143,7 @@ func TestFilterLogs(t *testing.T) {
 	t.Run("filter by address set up and address found", func(t *testing.T) {
 		addresses := make([]string, 1)
 		addresses[0] = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
-		c.logsFilters = &logsFilters{
+		c.logsFilters = logsFilters{
 			Addresses: addresses,
 		}
 
@@ -155,7 +155,7 @@ func TestFilterLogs(t *testing.T) {
 	t.Run("filter by address set up, but ignored", func(t *testing.T) {
 		addresses := make([]string, 1)
 		addresses[0] = "0x1234567890abcdef"
-		c.logsFilters = &logsFilters{
+		c.logsFilters = logsFilters{
 			Addresses: addresses,
 		}
 
