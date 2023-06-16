@@ -142,6 +142,7 @@ var proxyMethods = map[string]bool{
 	"eth_blockNumber":      true,
 	"eth_getBlockByNumber": true,
 	"eth_getBlockByHash":   true,
+	"eth_getLogs":          true,
 }
 
 // create new client when connecting
