@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/neonlabsorg/neon-proxy/pkg/service"
-	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
+	"github.com/neonlabsorg/neon-proxy/internal/proxy"
+	"github.com/neonlabsorg/neon-service-framework/pkg/service"
+	"github.com/neonlabsorg/neon-service-framework/pkg/service/configuration"
 )
 
 func main() {
@@ -15,11 +16,7 @@ func main() {
 		},
 	})
 
-	s.AddHandler(runProxy)
+	s.AddHandler(proxy.ServiceHandler)
 
 	s.Run()
-}
-
-func runProxy(s *service.Service) {
-
 }

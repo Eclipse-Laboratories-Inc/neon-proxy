@@ -8,7 +8,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/source"
-	"github.com/neonlabsorg/neon-proxy/pkg/logger"
+	"github.com/neonlabsorg/neon-service-framework/pkg/logger"
 )
 
 var upgrader = websocket.Upgrader{

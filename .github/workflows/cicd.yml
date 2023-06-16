@@ -5,26 +5,22 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'dev'
+      - dev
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Set up QEMU
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
-      -
-        name: Set up Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      -
-        name: Login to Docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      -
-        name: Build and push
+      - name: Build and push
         uses: docker/build-push-action@v4
         with:
           push: true
@@ -51,4 +47,4 @@ jobs:
           EVM_ADDRESS: ${{ vars.EVM_ADDRESS }}
           LOKI_URL: ${{ secrets.LOKI_URL }}
         run: |
-          docker-compose -f docker-compose-wssubscriber.yml up -d 
+          docker-compose -f docker-compose-wssubscriber.yml up -d

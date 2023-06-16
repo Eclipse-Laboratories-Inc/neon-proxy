@@ -8,16 +8,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
-	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/config"
-	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
-	"github.com/neonlabsorg/neon-proxy/pkg/logger"
 	"math/big"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/config"
+	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
+	"github.com/neonlabsorg/neon-service-framework/pkg/logger"
 )
 
 // Defines log internal type values

@@ -13,7 +13,7 @@ import (
 
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/utils"
-	"github.com/neonlabsorg/neon-proxy/pkg/logger"
+	"github.com/neonlabsorg/neon-service-framework/pkg/logger"
 )
 
 // error code is returned when specific slot is skipped, we check this and jump over skipped blocks during process
