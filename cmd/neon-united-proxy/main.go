@@ -17,6 +17,7 @@ func main() {
 				"indexer",
 			},
 		},
+		IsUnitedApp: true,
 	})
 
 	s.AddHandler(indexer.ServiceHandler)
