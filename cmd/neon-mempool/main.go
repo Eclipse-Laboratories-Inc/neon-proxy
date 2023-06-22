@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/neonlabsorg/neon-proxy/pkg/service"
-	"github.com/neonlabsorg/neon-proxy/pkg/service/configuration"
+	"github.com/neonlabsorg/neon-proxy/internal/mempool"
+	"github.com/neonlabsorg/neon-service-framework/pkg/service"
+	"github.com/neonlabsorg/neon-service-framework/pkg/service/configuration"
 )
 
 func main() {
@@ -10,11 +11,7 @@ func main() {
 		Name: "mempool",
 	})
 
-	s.AddHandler(runMempool)
+	s.AddHandler(mempool.ServiceHandler)
 
 	s.Run()
-}
-
-func runMempool(s *service.Service) {
-
 }

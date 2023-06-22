@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/neonlabsorg/neon-proxy/internal/wssubscriber/broadcaster"
-	"github.com/neonlabsorg/neon-proxy/pkg/logger"
+	"github.com/neonlabsorg/neon-service-framework/pkg/logger"
 )
 
 // RegisterNewHeadBroadcasterSources passes data and error channels where new incoming data (block heads) will be pushed and redirected to broadcaster

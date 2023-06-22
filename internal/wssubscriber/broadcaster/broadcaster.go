@@ -3,7 +3,7 @@ package broadcaster
 import (
 	"context"
 
-	"github.com/neonlabsorg/neon-proxy/pkg/logger"
+	"github.com/neonlabsorg/neon-service-framework/pkg/logger"
 )
 
 /*
