@@ -9,11 +9,13 @@ const (
 	solanaRPCEndpoint = "SOLANA_RPC_ENDPOINT"
 	wssubscriberPort  = "NEON_WEBSOCKET_PORT"
 	EvmAddress        = "EVM_ADDRESS"
+	EvmEndpoint       = "EVM_ENDPOINT"
 )
 
 // declare wssubscriber configuration parameters
 type WSSubscriberConfig struct {
 	SolanaRPCEndpoint string
+	EvmEndpoint       string
 	WssubscriberPort  string
 	EvmAddress        string
 }
@@ -37,8 +39,14 @@ func CreateConfigFromEnv() (cfg *WSSubscriberConfig, err error) {
 		port = "8080"
 	}
 
+	evmEndpoint := os.Getenv(EvmEndpoint)
+	if len(evmEndpoint) == 0 {
+		return nil, errors.New(EvmEndpoint + " env variable not set")
+	}
+
 	return &WSSubscriberConfig{
 		SolanaRPCEndpoint: endpoint,
+		EvmEndpoint:       evmEndpoint,
 		WssubscriberPort:  port,
 		EvmAddress:        evmAddr,
 	}, nil

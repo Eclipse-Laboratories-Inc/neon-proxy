@@ -210,7 +210,7 @@ func MarshalBlockData(blockHeader *BlockHeader, broadcaster chan interface{}, lo
 	// fill block data
 	blockData.BlockHeight = "0x" + fmt.Sprintf("%x", blockHeader.Result.BlockHeight)
 	blockData.BlockTime = "0x" + fmt.Sprintf("%x", blockHeader.Result.BlockTime)
-	blockData.Blockhash = utils.Base64stringToHex(blockHeader.Result.Blockhash)
+	blockData.Blockhash = utils.Base58stringToHex(blockHeader.Result.Blockhash)
 	blockData.Difficulty = "0x0"
 	blockData.ExtraData = "0x0000000000000000000000000000000000000000000000000000000000000001"
 	blockData.GasLimit = "0xec8563e271ac"
@@ -219,7 +219,7 @@ func MarshalBlockData(blockHeader *BlockHeader, broadcaster chan interface{}, lo
 	blockData.Miner = "0x0000000000000000000000000000000000000000"
 	blockData.MixHash = "0x0000000000000000000000000000000000000000000000000000000000000001"
 	blockData.Nonce = "0x0000000000000000"
-	blockData.PreviousBlockhash = utils.Base64stringToHex(lastProcessedBlockHash)
+	blockData.PreviousBlockhash = utils.Base58stringToHex(lastProcessedBlockHash)
 	blockData.ReceiptsRoot = "0x0000000000000000000000000000000000000000000000000000000000000001"
 	blockData.StateRoot = "0x0000000000000000000000000000000000000000000000000000000000000001"
 	blockData.TransactionsRoot = "0x0000000000000000000000000000000000000000000000000000000000000001"
@@ -254,4 +254,8 @@ func jsonRPC(jsonStr []byte, url string, requestType string) ([]byte, error) {
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	return body, nil
+}
+
+func EvmJsonRpc(jsonStr []byte, url string) ([]byte, error) {
+	return jsonRPC(jsonStr, url, "POST")
 }

@@ -40,6 +40,7 @@ const (
 	IncorrectParameterTypeErrorCode      = -4
 	SubscriptionAlreadyActiveErrorCode   = -5
 	IncorrectFilterErrorMessage          = -6
+	EvmRpcFailed                         = -7
 )
 
 // defining each connection parameters
@@ -77,6 +78,8 @@ type Client struct {
 	newLogsIsActive       bool
 	newLogsSubscriptionID string
 	logsFilters           logsFilters
+
+	evmRpcEndpoint string
 }
 
 // json object sent back to the client
@@ -117,7 +120,7 @@ type SubscriptionError struct {
 type SubscribeJsonResponseRCP struct {
 	Version string             `json:"jsonrpc"`
 	ID      uint64             `json:"id"`
-	Result  string             `json:"result,omitempty"`
+	Result  interface{}        `json:"result,omitempty"`
 	Error   *SubscriptionError `json:"error,omitempty"`
 }
 
@@ -131,17 +134,29 @@ type Event struct {
 	} `json:"params"`
 }
 
+var proxyMethods = map[string]bool{
+	"eth_call":             true,
+	"eth_estimateGas":      true,
+	"eth_getBalance":       true,
+	"eth_chainId":          true,
+	"eth_blockNumber":      true,
+	"eth_getBlockByNumber": true,
+	"eth_getBlockByHash":   true,
+	"eth_getLogs":          true,
+}
+
 // create new client when connecting
 func NewClient(conn *websocket.Conn, log logger.Logger,
 	headBroadcaster *broadcaster.Broadcaster, pendingTxBroadcaster *broadcaster.Broadcaster,
-	newLogsBroadcaster *broadcaster.Broadcaster) *Client {
+	newLogsBroadcaster *broadcaster.Broadcaster, evmRpcEndpoint string) *Client {
 	return &Client{
 		conn:                           conn,
 		log:                            log,
 		clientResponseBuffer:           make(chan []byte, 256),
 		newHeadsBroadcaster:            headBroadcaster,
 		pendingTransactionsBroadcaster: pendingTxBroadcaster,
-		newLogsBroadcaster:             newLogsBroadcaster}
+		newLogsBroadcaster:             newLogsBroadcaster,
+		evmRpcEndpoint:                 evmRpcEndpoint}
 }
 
 // readPump pumps messages from the websocket connection.
@@ -194,10 +209,15 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
 	// set corresponding response id
 	responseRPC.ID = requestRPC.ID
 
+	var _, isProxyMethod = proxyMethods[requestRPC.Method]
 	// check rpc version
-	if requestRPC.Method != methodSubscription && requestRPC.Method != methodUnsubscription {
+	if requestRPC.Method != methodSubscription && requestRPC.Method != methodUnsubscription && !isProxyMethod {
 		responseRPC.Error = &SubscriptionError{Code: MethodNotFoundErrorCode, Message: "The method " + requestRPC.Method + " does not exist/is not available"}
 		return
+	}
+
+	if isProxyMethod {
+		return c.evmProxyMethods(request, responseRPC.ID)
 	}
 
 	// check request id to be valid
@@ -229,7 +249,7 @@ func (c *Client) ProcessRequest(request []byte) (responseRPC SubscribeJsonRespon
 	case requestRPC.Params[0].(string) == subscriptionNewPendingTransactions:
 		c.subscribeToNewPendingTransactions(requestRPC, &responseRPC)
 	default:
-		responseRPC.Error = &SubscriptionError{Code: MethodNotFoundErrorCode, Message: "The method " + requestRPC.Method + " does not exist/is not available"}
+		responseRPC.Error = &SubscriptionError{Code: MethodNotFoundErrorCode, Message: "The method " + requestRPC.Method + " and params do not exist/is not available"}
 		return
 	}
 

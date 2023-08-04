@@ -21,15 +21,15 @@ func (c *Client) subscribeToNewHeads(requestRPC SubscribeJsonRPC, responseRPC *S
 
 	// if not subscribe to broadcaster
 	c.newHeadsSource = c.newHeadsBroadcaster.Subscribe()
-
 	// generate subscription id
-	responseRPC.Result = utils.NewID()
+	r := utils.NewID()
+	responseRPC.Result = r
 	responseRPC.ID = requestRPC.ID
 
 	// register subscription id for client
-	c.newHeadSubscriptionID = responseRPC.Result
+	c.newHeadSubscriptionID = r
 	c.newHeadsIsActive = true
-	c.log.Info().Msg("NewHeads subscription succeeded with ID: " + responseRPC.Result)
+	c.log.Info().Msg("NewHeads subscription succeeded with ID: " + r)
 	go c.CollectNewHeads()
 }
 
